@@ -17,46 +17,25 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
 
   // ---------------- CANCEL PICKUP ----------------
   Future<void> _cancelPickup() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Cancel Pickup"),
-        content: const Text("Are you sure you want to cancel this pickup?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("No")),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Yes")),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final success = await ApiService.updateTrashPickup(
-        widget.pickup['id'],
-        {"status": "cancelled"},
-      );
-
-      if (success) {
-        if (!mounted) return;
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Pickup cancelled successfully")),
-        );
-      } else {
-        throw Exception("Failed to cancel pickup");
-      }
-    } catch (e) {
+    final id = widget.pickup['id'] as int?;
+    if (id == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        const SnackBar(content: Text("Missing pickup ID")),
       );
-    } finally {
-      setState(() => _isLoading = false);
+      return;
     }
-  }
+
+    // Call your API (PATCH to set status = CANCELLED)
+    final ok = await ApiService.updateTrashPickup(id, {"status": "CANCELLED"});
+    if (!mounted) return;
+    if (ok) {
+      final updatedPickup = {
+        ...widget.pickup,
+        "status": "CANCELLED",
+      };
+      Navigator.pop(context, {"refresh": true, "pickup": updatedPickup});
+    }
 
   @override
   Widget build(BuildContext context) {
@@ -204,18 +183,12 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                       if (status == "PENDING" || status == "IN_PROGRESS")
                         Center(
                           child: ElevatedButton.icon(
-                            onPressed: _cancelPickup,
-                            icon: const Icon(Icons.cancel, color: Colors.white),
-                            label: const Text(
-                              "Cancel Pickup",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent,
+                          onPressed: _cancelPickup,
+                          icon: const Icon(Icons.cancel),
+                          label: const Text("Cancel Pickup"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 14),
+                                horizontal: 24, vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),

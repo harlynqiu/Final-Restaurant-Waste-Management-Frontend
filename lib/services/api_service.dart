@@ -1,62 +1,125 @@
+// lib/services/api_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
-
 class ApiService {
-  static const String baseUrl = "http://127.0.0.1:8000/api"; // change to your server IP if on mobile
-  //static const String baseUrl = "http://192.168.254.191/api";
-  //static const String baseUrl = "http://10.0.2.2:8000/api";
+  // ============================
+  // 🔗 BASE URL (pick ONE)
+  // ============================
+  // Desktop/Web (Django on same machine):
+  static const String baseUrl = "http://127.0.0.1:8000/api";
+  // Android emulator:
+  // static const String baseUrl = "http://10.0.2.2:8000/api";
+  // Physical phone on same Wi-Fi (replace with your PC's LAN IP):
+  // static const String baseUrl = "http://192.168.254.191:8000/api";
 
+  // ============================
+  // 🔐 Token Keys + Helpers
+  // ============================
+  static const _kAccess = 'access_token';
+  static const _kRefresh = 'refresh_token';
 
-  // ---------------- LOGIN USER ----------------
-static Future<bool> loginUser(String username, String password) async {
-  final response = await http.post(
-    Uri.parse('$baseUrl/token/'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({'username': username, 'password': password}),
-  );
-
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
+  static Future<String?> _getAccessToken() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('access_token', data['access']);
-    await prefs.setString('refresh_token', data['refresh']);
-    debugPrint("✅ Login successful — tokens saved");
-    return true;
-  } else {
-    debugPrint("❌ Login failed: ${response.body}");
-    return false;
+    return prefs.getString(_kAccess);
   }
-}
-  // ---------------- REFRESH TOKEN ----------------
-static Future<bool> refreshToken() async {
-  final prefs = await SharedPreferences.getInstance();
-  final refresh = prefs.getString('refresh_token');
-  if (refresh == null) return false;
 
-  final response = await http.post(
-    Uri.parse('$baseUrl/token/refresh/'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({'refresh': refresh}),
-  );
-
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
-    await prefs.setString('access_token', data['access']);
-    debugPrint("🔄 Token refreshed successfully");
-    return true;
-  } else {
-    debugPrint("❌ Token refresh failed: ${response.body}");
-    return false;
+  static Future<void> _setAccessToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kAccess, token);
   }
-}
 
+  static Future<String?> _getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kRefresh);
+  }
 
-  // --------------------------------------------------------
-  // 🧾 REGISTER - Used in SignupScreen
-  // --------------------------------------------------------
+  static Future<void> _setRefreshToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kRefresh, token);
+  }
+
+  static Future<void> _clearTokens() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kAccess);
+    await prefs.remove(_kRefresh);
+  }
+
+  static Future<Map<String, String>> _authHeaders() async {
+    final token = await _getAccessToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  /// Runs a request; if it returns 401 once, try refresh token and repeat.
+  static Future<http.Response> _withAuthRetry(
+    Future<http.Response> Function() makeRequest,
+  ) async {
+    var res = await makeRequest();
+    if (res.statusCode != 401) return res;
+
+    final refreshed = await refreshToken();
+    if (!refreshed) return res;
+
+    // Retry once after successful refresh
+    res = await makeRequest();
+    return res;
+  }
+
+  // ============================
+  // 👤 Auth
+  // ============================
+  static Future<bool> loginUser(String username, String password) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/token/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': username, 'password': password}),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await _setAccessToken(data['access']);
+      await _setRefreshToken(data['refresh']);
+      debugPrint("✅ Login successful — tokens saved");
+      return true;
+    } else {
+      debugPrint("❌ Login failed: ${response.body}");
+      return false;
+    }
+  }
+
+  static Future<bool> refreshToken() async {
+    final refresh = await _getRefreshToken();
+    if (refresh == null) return false;
+
+    final res = await http.post(
+      Uri.parse('$baseUrl/token/refresh/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refresh': refresh}),
+    );
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      await _setAccessToken(data['access']);
+      debugPrint("🔄 Token refreshed successfully");
+      return true;
+    } else {
+      debugPrint("❌ Token refresh failed: ${res.body}");
+      return false;
+    }
+  }
+
+  static Future<void> logout() async {
+    await _clearTokens();
+  }
+
+  // ============================
+  // 🧾 Register (SignupScreen)
+  // ============================
   static Future<bool> register(
     String username,
     String password, {
@@ -79,236 +142,283 @@ static Future<bool> refreshToken() async {
         }),
       );
 
-      // Django returns 201 when created successfully
       if (response.statusCode == 201) {
-        print("✅ Registration successful!");
+        debugPrint("✅ Registration successful!");
         return true;
       } else {
-        print("❌ Registration failed (${response.statusCode}): ${response.body}");
+        debugPrint("❌ Registration failed (${response.statusCode}): ${response.body}");
         return false;
       }
     } catch (e) {
-      print("⚠️ Registration error: $e");
+      debugPrint("⚠️ Registration error: $e");
       return false;
     }
   }
 
+  // ============================
+  // 👤 Current User
+  // ============================
+  static Future<Map<String, dynamic>?> getCurrentUser() async {
+    try {
+      final res = await _withAuthRetry(() async {
+        return http.get(
+          Uri.parse('$baseUrl/employees/me/'),
+          headers: await _authHeaders(),
+        );
+      });
 
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        debugPrint("👤 Current user: $data");
+        return data;
+      }
 
+      debugPrint("❌ getCurrentUser failed: ${res.statusCode} - ${res.body}");
+    } catch (e) {
+      debugPrint("⚠️ Error fetching user: $e");
+    }
+    return null;
+  }
 
-  // ---------------------------------------------------------
-  // GET TRASH PICKUPS
-  // ---------------------------------------------------------
+  // ============================
+  // 🗑️ Trash Pickups
+  // ============================
   static Future<List<dynamic>> getTrashPickups() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/trash_pickups/"),
+        headers: await _authHeaders(),
+      );
+    });
 
-    if (token == null) throw Exception("Not authenticated.");
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    }
 
-    final url = Uri.parse("$baseUrl/trash_pickups/");
-    final response = await http.get(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else if (response.statusCode == 401) {
+    if (res.statusCode == 401) {
       throw Exception("Unauthorized. Please log in again.");
-    } else {
-      throw Exception("Failed to load pickups.");
     }
+
+    throw Exception("Failed to load pickups: ${res.statusCode} ${res.body}");
   }
 
-  // ---------------------------------------------------------
-  // CREATE NEW PICKUP
-  // ---------------------------------------------------------
+  // Optional alias that matches your older call sites
+  static Future<List<dynamic>> getTrashPickupsAuto() => getTrashPickups();
+
   static Future<bool> createTrashPickup(Map<String, dynamic> data) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
+    final res = await _withAuthRetry(() async {
+      return http.post(
+        Uri.parse("$baseUrl/trash_pickups/"),
+        headers: await _authHeaders(),
+        body: jsonEncode(data),
+      );
+    });
 
-    final url = Uri.parse("$baseUrl/trash_pickups/");
-    final response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode(data),
-    );
-
-    return response.statusCode == 201;
+    if (res.statusCode == 201) return true;
+    debugPrint("❌ Create pickup failed (${res.statusCode}): ${res.body}");
+    return false;
   }
 
-  // -----------------------------------
-  // GET REWARD POINTS
-  // -----------------------------------
+  static Future<bool> addTrashPickup(Map<String, dynamic> body) async {
+    // kept for backward compatibility; same as create
+    return createTrashPickup(body);
+  }
+
+  static Future<bool> updateTrashPickup(int id, Map<String, dynamic> body) async {
+    final res = await _withAuthRetry(() async {
+      return http.patch(
+        Uri.parse('$baseUrl/trash_pickups/$id/'),
+        headers: await _authHeaders(),
+        body: jsonEncode(body),
+      );
+    });
+
+    if (res.statusCode == 200) {
+      debugPrint("✅ Pickup $id updated successfully");
+      return true;
+    } else {
+      debugPrint("❌ Failed to update pickup (${res.statusCode}): ${res.body}");
+      return false;
+    }
+  }
+
+  // ============================
+  // 🏆 Rewards
+  // ============================
+  // If you need the raw object (e.g., {"points": 10, ...})
   static Future<Map<String, dynamic>> getRewardPoints() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-    final response = await http.get(
-      Uri.parse("$baseUrl/rewards/points/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/rewards/points/"),
+        headers: await _authHeaders(),
+      );
+    });
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to load reward points");
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    }
+    throw Exception("Failed to load reward points: ${res.statusCode}");
+  }
+
+  // If you only need the integer points (used by your UI chip)
+  static Future<int> getUserPoints() async {
+    try {
+      final res = await _withAuthRetry(() async {
+        return http.get(
+          Uri.parse('$baseUrl/rewards/points/'),
+          headers: await _authHeaders(),
+        );
+      });
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['points'] ?? 0;
+      } else {
+        debugPrint("❌ getUserPoints failed: ${res.statusCode} - ${res.body}");
+        return 0;
+      }
+    } catch (e) {
+      debugPrint("⚠️ getUserPoints error: $e");
+      return 0;
     }
   }
 
-  // -----------------------------------
-  // GET REWARD TRANSACTIONS
-  // -----------------------------------
   static Future<List<dynamic>> getRewardTransactions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-    final response = await http.get(
-      Uri.parse("$baseUrl/rewards/transactions/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/rewards/transactions/"),
+        headers: await _authHeaders(),
+      );
+    });
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to load transactions");
+      throw Exception("Failed to load transactions: ${res.statusCode}");
     }
   }
 
-  // -----------------------------------
-  // GET AVAILABLE VOUCHERS
-  // -----------------------------------
   static Future<List<dynamic>> getVouchers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-    final response = await http.get(
-      Uri.parse("$baseUrl/rewards/vouchers/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/rewards/vouchers/"),
+        headers: await _authHeaders(),
+      );
+    });
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to load vouchers");
+      throw Exception("Failed to load vouchers: ${res.statusCode}");
     }
   }
 
-  // -----------------------------------
-  // REDEEM A VOUCHER
-  // -----------------------------------
   static Future<String> redeemVoucher(int voucherId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-    final response = await http.post(
-      Uri.parse("$baseUrl/rewards/redeem/"),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({'voucher_id': voucherId}),
-    );
+    final res = await _withAuthRetry(() async {
+      return http.post(
+        Uri.parse("$baseUrl/rewards/redeem/"),
+        headers: await _authHeaders(),
+        body: jsonEncode({'voucher_id': voucherId}),
+      );
+    });
 
-    final data = jsonDecode(response.body);
-    if (response.statusCode == 200) {
+    final data = jsonDecode(res.body);
+    if (res.statusCode == 200) {
       return data['success'] ?? "Redeemed successfully!";
     } else {
       throw Exception(data['error'] ?? "Redemption failed");
     }
   }
 
-    // -----------------------------------
-  // GET REDEMPTION HISTORY
-  // -----------------------------------
   static Future<List<dynamic>> getRewardRedemptions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-    final response = await http.get(
-      Uri.parse("$baseUrl/rewards/redemptions/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to load redemption history");
-    }
-  }
-
-    // ============================
-  // SUBSCRIPTION: GET AVAILABLE PLANS
-  // ============================
-  static Future<List<dynamic>> getPlans() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final res = await http.get(
-      Uri.parse("$baseUrl/subscriptions/plans/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/rewards/redemptions/"),
+        headers: await _authHeaders(),
+      );
+    });
 
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to load plans");
+      throw Exception("Failed to load redemption history: ${res.statusCode}");
     }
   }
 
   // ============================
-  // SUBSCRIPTION: GET MY SUBSCRIPTION
+  // 👥 Employees
   // ============================
-  static Future<Map<String, dynamic>?> getMySubscription() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
+  static Future<List<dynamic>> getEmployees() async {
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/employees/"),
+        headers: await _authHeaders(),
+      );
+    });
 
-    final res = await http.get(
-      Uri.parse("$baseUrl/subscriptions/mine/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else {
+      throw Exception("Failed to load employees: ${res.statusCode} ${res.body}");
+    }
+  }
+
+  // ============================
+  // 💳 Subscriptions
+  // ============================
+  static Future<List<dynamic>> getPlans() async {
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/subscriptions/plans/"),
+        headers: await _authHeaders(),
+      );
+    });
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else {
+      throw Exception("Failed to load plans: ${res.statusCode}");
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getMySubscription() async {
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/subscriptions/mine/"),
+        headers: await _authHeaders(),
+      );
+    });
 
     if (res.statusCode == 200) {
       if (res.body.isEmpty) return null;
       return jsonDecode(res.body);
     } else if (res.statusCode == 404) {
-      // no subscription yet
-      return null;
+      return null; // no subscription yet
     } else {
-      throw Exception("Failed to load subscription");
+      throw Exception("Failed to load subscription: ${res.statusCode}");
     }
   }
 
-  // ============================
-  // SUBSCRIPTION: SUBSCRIBE / RENEW
-  // ============================
   static Future<Map<String, dynamic>> subscribeToPlan({
     required int planId,
     required String method,
-    String? voucherCode, // 👈 added
+    String? voucherCode,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final Map<String, dynamic> body = {
+    final body = <String, dynamic>{
       "plan_id": planId,
       "method": method,
     };
-
-    // 👇 include voucher only if provided
     if (voucherCode != null && voucherCode.isNotEmpty) {
       body["voucher_code"] = voucherCode;
     }
 
-    final res = await http.post(
-      Uri.parse("$baseUrl/subscriptions/subscribe/"),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(body),
-    );
+    final res = await _withAuthRetry(() async {
+      return http.post(
+        Uri.parse("$baseUrl/subscriptions/subscribe/"),
+        headers: await _authHeaders(),
+        body: jsonEncode(body),
+      );
+    });
 
     if (res.statusCode == 201) {
       return jsonDecode(res.body);
@@ -317,317 +427,91 @@ static Future<bool> refreshToken() async {
     }
   }
 
-  // ============================
-  // SUBSCRIPTION: CANCEL AUTO-RENEW
-  // ============================
   static Future<String> cancelAutoRenew() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final res = await http.post(
-      Uri.parse("$baseUrl/subscriptions/cancel/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.post(
+        Uri.parse("$baseUrl/subscriptions/cancel/"),
+        headers: await _authHeaders(),
+      );
+    });
 
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
       return data['message'] ?? "Cancelled";
     } else {
-      throw Exception("Unable to cancel auto-renew");
+      throw Exception("Unable to cancel auto-renew: ${res.statusCode}");
     }
   }
 
-  // ============================
-  // SUBSCRIPTION: PAYMENT HISTORY
-  // ============================
   static Future<List<dynamic>> getPaymentHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final res = await http.get(
-      Uri.parse("$baseUrl/subscriptions/payments/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/subscriptions/payments/"),
+        headers: await _authHeaders(),
+      );
+    });
 
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to load payments");
+      throw Exception("Failed to load payments: ${res.statusCode}");
     }
   }
 
-    // ============================
-  // DONATION DRIVES
   // ============================
-
-  // 🔹 Get all active donation drives
+  // 🎁 Donation Drives
+  // ============================
   static Future<List<dynamic>> getDonationDrives() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final res = await http.get(
-      Uri.parse("$baseUrl/donations/drives/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/donations/drives/"),
+        headers: await _authHeaders(),
+      );
+    });
 
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to load donation drives");
+      throw Exception("Failed to load donation drives: ${res.statusCode}");
     }
   }
 
-  // 🔹 Get current user’s donations
   static Future<List<dynamic>> getMyDonations() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final res = await http.get(
-      Uri.parse("$baseUrl/donations/participations/"),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/donations/participations/"),
+        headers: await _authHeaders(),
+      );
+    });
 
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to load donation history");
+      throw Exception("Failed to load donation history: ${res.statusCode}");
     }
   }
 
-  // 🔹 Create new donation
   static Future<void> createDonation({
     required int driveId,
     required String item,
     required String quantity,
     String? remarks,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final res = await http.post(
-      Uri.parse("$baseUrl/donations/participations/"),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        "drive": driveId,
-        "donated_item": item,
-        "quantity": quantity,
-        "remarks": remarks ?? "",
-      }),
-    );
+    final res = await _withAuthRetry(() async {
+      return http.post(
+        Uri.parse("$baseUrl/donations/participations/"),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          "drive": driveId,
+          "donated_item": item,
+          "quantity": quantity,
+          "remarks": remarks ?? "",
+        }),
+      );
+    });
 
     if (res.statusCode != 201) {
-      throw Exception("Failed to submit donation: ${res.body}");
+      throw Exception("Failed to submit donation: ${res.statusCode} ${res.body}");
     }
   }
-
-    // ============================
-  // 👥 EMPLOYEES
-  // ============================
-  static Future<List<dynamic>> getEmployees() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access');
-
-    final res = await http.get(
-      Uri.parse("$baseUrl/employees/"), // ✅ your Django endpoint
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
-    } else {
-      throw Exception("Failed to load employees: ${res.body}");
-    }
-  }
-
-    // -----------------------------
-  // 🧩 AUTH HEADERS
-  // -----------------------------
-  static Future<Map<String, String>> _getHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString("access");
-    return {
-      "Content-Type": "application/json",
-      if (token != null) "Authorization": "Bearer $token",
-    };
-  }
-
-  
-  // -----------------------------
-  // 🔐 LOGOUT
-  // -----------------------------
-  static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove("access");
-    await prefs.remove("refresh");
-  }
-
-  // ---------------- GET CURRENT USER ----------------
-static Future<Map<String, dynamic>?> getCurrentUser() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
-
-    if (token == null) {
-      debugPrint("⚠️ No access token found — user not logged in.");
-      return null;
-    }
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/employees/me/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      debugPrint("👤 Current user: $data");
-      return data;
-    } else if (response.statusCode == 401) {
-      debugPrint("🔒 Unauthorized — token may be invalid or expired.");
-    } else {
-      debugPrint("❌ Failed to fetch user (${response.statusCode}): ${response.body}");
-    }
-  } catch (e) {
-    debugPrint("⚠️ Error fetching user: $e");
-  }
-  return null;
-}
-
-  // -----------------------------
-  // 🏆 USER POINTS
-  // -----------------------------
-  static Future<int> getUserPoints() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
-
-    if (token == null) return 0;
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/rewards/points/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['points'] ?? 0;
-    } else {
-      debugPrint("❌ getUserPoints failed: ${response.statusCode} - ${response.body}");
-      return 0;
-    }
-  } catch (e) {
-    debugPrint("⚠️ getUserPoints error: $e");
-    return 0;
-  }
-}
-
-// get trash pickups auto
-
-static Future<List<dynamic>> getTrashPickupsAuto() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token');
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/trash_pickups/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      debugPrint("❌ getTrashPickups failed: ${response.statusCode} - ${response.body}");
-      return [];
-    }
-  } catch (e) {
-    debugPrint("⚠️ getTrashPickups error: $e");
-    return [];
-  }
-}
-
-  // ---------------- UPDATE TRASH PICKUP ----------------
-  static Future<bool> updateTrashPickup(int id, Map<String, dynamic> body) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token');
-
-      final response = await http.patch(
-        Uri.parse('$baseUrl/trash_pickups/$id/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode == 200) {
-        debugPrint("✅ Pickup $id updated successfully");
-        return true;
-      } else {
-        debugPrint("❌ Failed to update pickup (${response.statusCode}): ${response.body}");
-        return false;
-      }
-    } catch (e) {
-      debugPrint("⚠️ Error updating pickup: $e");
-      return false;
-    }
-  }
-
- // ADD TRASH PICK UP  
-
-static Future<bool> addTrashPickup(Map<String, dynamic> body) async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('access_token');
-
-    Future<http.Response> makeRequest() {
-      return http.post(
-        Uri.parse('$baseUrl/trash_pickups/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(body),
-      );
-    }
-
-    var response = await makeRequest();
-
-    if (response.statusCode == 401 &&
-        response.body.contains("token_not_valid")) {
-      // Try refresh
-      final refreshed = await refreshToken();
-      if (refreshed) {
-        token = prefs.getString('access_token');
-        response = await makeRequest();
-      }
-    }
-
-    if (response.statusCode == 201) {
-      debugPrint("✅ Pickup created successfully");
-      return true;
-    } else {
-      debugPrint("❌ Failed (${response.statusCode}): ${response.body}");
-      return false;
-    }
-  } catch (e) {
-    debugPrint("⚠️ Error creating pickup: $e");
-    return false;
-  }
-}
-
 }

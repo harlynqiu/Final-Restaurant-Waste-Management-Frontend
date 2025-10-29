@@ -27,20 +27,33 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
   // -------------------- FETCH PICKUPS + POINTS --------------------
   Future<void> _fetchAll() async {
     setState(() => _isLoading = true);
+
+    int pts = _points; // keep current on failure
+    List<dynamic> list = pickups; // keep current on failure
+
+    // Run both with independent error handling
     try {
-      final pts = await ApiService.getUserPoints();
-      final list = await ApiService.getTrashPickups(); // or getTrashPickupsAuto()
-      setState(() {
-        _points = pts;
-        pickups = list;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    } finally {
-      setState(() => _isLoading = false);
+      pts = await ApiService.getUserPoints();
+    } catch (_) {
+      // silently ignore points failure; optional: show a small SnackBar once
     }
+
+    try {
+      list = await ApiService.getTrashPickups();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to load pickups: $e")),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _points = pts;
+      pickups = list;
+      _isLoading = false;
+    });
   }
 
   // -------------------- NAVIGATE TO DETAILS --------------------
