@@ -296,7 +296,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
-                      "assets/images/white_eagle_logo.png",
+                      "assets/images/black_philippine_eagle.png",
                       width: 100,
                     ),
                     const SizedBox(height: 10),
@@ -415,4 +415,8 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
   }
+
+  
+
+
 }

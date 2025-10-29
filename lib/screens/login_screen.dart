@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import 'dashboard_screen.dart';
-//import 'driver_dashboard.dart';
+import 'driver_dashboard.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
-    final success = await ApiService.login(username, password);
+    final success = await ApiService.loginUser(username, password);
     setState(() => _isLoading = false);
 
     if (!mounted) return;
@@ -82,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 // 🦅 App Logo
                 Image.asset(
-                  "assets/images/white_eagle_logo.png",
+                  "assets/images/black_philippine_eagle.png",
                   width: 120,
                 ),
                 const SizedBox(height: 10),

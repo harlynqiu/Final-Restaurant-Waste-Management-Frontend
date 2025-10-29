@@ -1,32 +1,100 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+
 
 class ApiService {
   static const String baseUrl = "http://127.0.0.1:8000/api"; // change to your server IP if on mobile
   //static const String baseUrl = "http://192.168.254.191/api";
   //static const String baseUrl = "http://10.0.2.2:8000/api";
-  // ---------------------------------------------------------
-  // LOGIN: Gets access + refresh token from Django backend
-  // ---------------------------------------------------------
-  static Future<bool> login(String username, String password) async {
-    final url = Uri.parse("$baseUrl/token/");
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
-    );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('access', data['access']);
-      await prefs.setString('refresh', data['refresh']);
-      return true;
-    } else {
+
+  // ---------------- LOGIN USER ----------------
+static Future<bool> loginUser(String username, String password) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/token/'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'username': username, 'password': password}),
+  );
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', data['access']);
+    await prefs.setString('refresh_token', data['refresh']);
+    debugPrint("✅ Login successful — tokens saved");
+    return true;
+  } else {
+    debugPrint("❌ Login failed: ${response.body}");
+    return false;
+  }
+}
+  // ---------------- REFRESH TOKEN ----------------
+static Future<bool> refreshToken() async {
+  final prefs = await SharedPreferences.getInstance();
+  final refresh = prefs.getString('refresh_token');
+  if (refresh == null) return false;
+
+  final response = await http.post(
+    Uri.parse('$baseUrl/token/refresh/'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({'refresh': refresh}),
+  );
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    await prefs.setString('access_token', data['access']);
+    debugPrint("🔄 Token refreshed successfully");
+    return true;
+  } else {
+    debugPrint("❌ Token refresh failed: ${response.body}");
+    return false;
+  }
+}
+
+
+  // --------------------------------------------------------
+  // 🧾 REGISTER - Used in SignupScreen
+  // --------------------------------------------------------
+  static Future<bool> register(
+    String username,
+    String password, {
+    String? email,
+    required String restaurantName,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/employees/register/"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "username": username,
+          "password": password,
+          "email": email,
+          "restaurant_name": restaurantName,
+          "latitude": latitude,
+          "longitude": longitude,
+        }),
+      );
+
+      // Django returns 201 when created successfully
+      if (response.statusCode == 201) {
+        print("✅ Registration successful!");
+        return true;
+      } else {
+        print("❌ Registration failed (${response.statusCode}): ${response.body}");
+        return false;
+      }
+    } catch (e) {
+      print("⚠️ Registration error: $e");
       return false;
     }
   }
+
+
+
 
   // ---------------------------------------------------------
   // GET TRASH PICKUPS
@@ -389,6 +457,7 @@ class ApiService {
     };
   }
 
+  
   // -----------------------------
   // 🔐 LOGOUT
   // -----------------------------
@@ -398,33 +467,167 @@ class ApiService {
     await prefs.remove("refresh");
   }
 
-  // -----------------------------
-  // 👤 CURRENT USER INFO
-  // -----------------------------
-  static Future<Map<String, dynamic>?> getCurrentUser() async {
-    final headers = await _getHeaders();
-    final response = await http.get(Uri.parse("$baseUrl/employees/me/"), headers: headers);
+  // ---------------- GET CURRENT USER ----------------
+static Future<Map<String, dynamic>?> getCurrentUser() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+
+    if (token == null) {
+      debugPrint("⚠️ No access token found — user not logged in.");
+      return null;
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/employees/me/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
 
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      final data = jsonDecode(response.body);
+      debugPrint("👤 Current user: $data");
+      return data;
+    } else if (response.statusCode == 401) {
+      debugPrint("🔒 Unauthorized — token may be invalid or expired.");
     } else {
-      throw Exception("Failed to load user info (${response.statusCode})");
+      debugPrint("❌ Failed to fetch user (${response.statusCode}): ${response.body}");
     }
+  } catch (e) {
+    debugPrint("⚠️ Error fetching user: $e");
   }
+  return null;
+}
 
   // -----------------------------
   // 🏆 USER POINTS
   // -----------------------------
   static Future<int> getUserPoints() async {
-    final headers = await _getHeaders();
-    final response = await http.get(Uri.parse("$baseUrl/rewards/points/"), headers: headers);
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+
+    if (token == null) return 0;
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/rewards/points/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      return data["points"] ?? 0;
+      final data = jsonDecode(response.body);
+      return data['points'] ?? 0;
     } else {
+      debugPrint("❌ getUserPoints failed: ${response.statusCode} - ${response.body}");
       return 0;
     }
+  } catch (e) {
+    debugPrint("⚠️ getUserPoints error: $e");
+    return 0;
   }
+}
+
+// get trash pickups auto
+
+static Future<List<dynamic>> getTrashPickupsAuto() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/trash_pickups/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      debugPrint("❌ getTrashPickups failed: ${response.statusCode} - ${response.body}");
+      return [];
+    }
+  } catch (e) {
+    debugPrint("⚠️ getTrashPickups error: $e");
+    return [];
+  }
+}
+
+  // ---------------- UPDATE TRASH PICKUP ----------------
+  static Future<bool> updateTrashPickup(int id, Map<String, dynamic> body) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/trash_pickups/$id/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint("✅ Pickup $id updated successfully");
+        return true;
+      } else {
+        debugPrint("❌ Failed to update pickup (${response.statusCode}): ${response.body}");
+        return false;
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error updating pickup: $e");
+      return false;
+    }
+  }
+
+ // ADD TRASH PICK UP  
+
+static Future<bool> addTrashPickup(Map<String, dynamic> body) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('access_token');
+
+    Future<http.Response> makeRequest() {
+      return http.post(
+        Uri.parse('$baseUrl/trash_pickups/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
+      );
+    }
+
+    var response = await makeRequest();
+
+    if (response.statusCode == 401 &&
+        response.body.contains("token_not_valid")) {
+      // Try refresh
+      final refreshed = await refreshToken();
+      if (refreshed) {
+        token = prefs.getString('access_token');
+        response = await makeRequest();
+      }
+    }
+
+    if (response.statusCode == 201) {
+      debugPrint("✅ Pickup created successfully");
+      return true;
+    } else {
+      debugPrint("❌ Failed (${response.statusCode}): ${response.body}");
+      return false;
+    }
+  } catch (e) {
+    debugPrint("⚠️ Error creating pickup: $e");
+    return false;
+  }
+}
 
 }
