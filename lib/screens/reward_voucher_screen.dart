@@ -185,15 +185,18 @@ class _RewardVoucherScreenState extends State<RewardVoucherScreen> {
     );
   }
 
-  // 🎨 Compact Voucher Card (image on left)
+  // 🎨 Compact Voucher Card (smaller and left-aligned)
   Widget _buildVoucherCard(dynamic item) {
-    return Center(
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return Align(
+      alignment: Alignment.centerLeft, // ensures left alignment
       child: Card(
         elevation: 3,
-        margin: const EdgeInsets.symmetric(vertical: 10),
+        margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         child: Container(
-          width: 350, // not full-width for clean layout
+          width: screenWidth * 0.3, // now the width will actually apply
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
@@ -202,12 +205,12 @@ class _RewardVoucherScreenState extends State<RewardVoucherScreen> {
                 borderRadius: BorderRadius.circular(12),
                 child: Image.asset(
                   item['image'] ?? "assets/images/placeholder.png",
-                  width: 80,
-                  height: 80,
+                  width: 65,
+                  height: 65,
                   fit: BoxFit.cover,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
 
               // 📄 Info + Redeem Button
               Expanded(
@@ -217,37 +220,40 @@ class _RewardVoucherScreenState extends State<RewardVoucherScreen> {
                     Text(
                       item['name'] ?? "Voucher",
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       item['description'] ?? "",
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         color: Colors.black54,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerRight,
                       child: ElevatedButton.icon(
                         onPressed: () => _redeemVoucher(item['id']),
-                        icon:
-                            const Icon(Icons.redeem, color: Colors.white, size: 18),
+                        icon: const Icon(Icons.redeem,
+                            color: Colors.white, size: 16),
                         label: Text(
                           "${item['points_required']} pts",
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold, color: Colors.white),
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: darwcosGreen,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
+                              horizontal: 12, vertical: 6),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
                       ),
@@ -262,3 +268,4 @@ class _RewardVoucherScreenState extends State<RewardVoucherScreen> {
     );
   }
 }
+ 

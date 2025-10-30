@@ -127,7 +127,6 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
   Widget _buildPickupCard(Map<String, dynamic> p) {
     final status = p["status"]?.toString().toUpperCase() ?? "UNKNOWN";
     final color = _getStatusColor(status);
-    final icon = _getStatusIcon(status);
 
     return Card(
       elevation: 3,
@@ -143,14 +142,21 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: [
+              // 🟢 Pickup icon with original colors
               Container(
-                height: 45,
-                width: 45,
+                height: 120,
+                width: 120,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: color, size: 26),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Image.asset(
+                    "assets/images/pickup.png",
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(

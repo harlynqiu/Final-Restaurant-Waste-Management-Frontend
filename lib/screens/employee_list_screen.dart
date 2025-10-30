@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'employee_form_screen.dart'; // ✅ new import
 
 class EmployeeListScreen extends StatefulWidget {
   const EmployeeListScreen({super.key});
@@ -37,15 +38,26 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     }
   }
 
+  Future<void> _navigateToAddEmployee() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EmployeeFormScreen()),
+    );
+    if (result == true) {
+      // Refresh employee list when coming back
+      _loadEmployees();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(
-          title: Text("Employees"),
+          title: const Text("Employees"),
           backgroundColor: darwcosGreen,
         ),
-        body: Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -63,6 +75,13 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       appBar: AppBar(
         title: const Text("Employees"),
         backgroundColor: darwcosGreen,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: "New Employee",
+            onPressed: _navigateToAddEmployee,
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadEmployees,

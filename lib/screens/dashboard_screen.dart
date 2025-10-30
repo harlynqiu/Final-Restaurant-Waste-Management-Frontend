@@ -4,7 +4,7 @@ import 'trash_pickup_screen.dart';
 import 'rewards_dashboard_screen.dart';
 import 'employee_list_screen.dart';
 import 'my_subscription_screen.dart';
-import 'donation_drive_list_screen.dart'; // ✅ NEW
+import 'donation_drive_list_screen.dart';
 import 'login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -313,7 +313,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   ),
                   _buildDashboardCard(
-                    icon: Icons.favorite, // ❤️ new
+                    icon: Icons.people,
+                    title: "Employees",
+                    subtitle: "Manage your staff records",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const EmployeeListScreen()),
+                      );
+                    },
+                  ),
+                  _buildDashboardCard(
+                    icon: Icons.favorite,
                     title: "Donation Drives",
                     subtitle: "Join & give back to the community",
                     onTap: () {
@@ -415,6 +427,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.people),
+            title: const Text('Employees'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const EmployeeListScreen()),
+              );
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.favorite, color: Colors.redAccent),
             title: const Text('Donation Drives'),
             onTap: () {
@@ -468,7 +492,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: "Dashboard"),
           BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: "Pickups"),
           BottomNavigationBarItem(icon: Icon(Icons.card_giftcard), label: "Rewards"),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: "Donations"), // ❤️
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: "Donations"),
           BottomNavigationBarItem(icon: Icon(Icons.subscriptions), label: "Plans"),
         ],
       ),

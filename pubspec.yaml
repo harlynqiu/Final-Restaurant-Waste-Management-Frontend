@@ -55,6 +55,9 @@ flutter:
      - assets/images/50_discount.png
      - assets/images/100_discount.png
      - assets/images/trash_bag.png
+     - assets/images/payment.png
+     - assets/images/pickup.png
+     - assets/images/davao_thermo_corp.png
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

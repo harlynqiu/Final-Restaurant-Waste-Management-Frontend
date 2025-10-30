@@ -31,22 +31,43 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Confirm Cancellation"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          "Confirm Cancellation",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: darwcosGreen,
+          ),
+        ),
         content: const Text(
           "Are you sure you want to cancel this pickup?\nThis action cannot be undone.",
+          style: TextStyle(fontSize: 15),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("No", style: TextStyle(color: Colors.grey)),
+            child: const Text(
+              "No",
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
+              backgroundColor: darwcosGreen,
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: const Text("Yes, Cancel"),
+            child: const Text(
+              "Yes, Cancel",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -83,7 +104,7 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("Pickup cancelled successfully."),
-        backgroundColor: Colors.redAccent,
+        backgroundColor: darwcosGreen,
       ),
     );
   }
@@ -117,7 +138,12 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
     final wasteType = p['waste_type'] ?? "Unknown";
     final weight = p['weight_kg']?.toString() ?? "0";
     final scheduled = _formatDate(p['scheduled_date'] ?? p['created_at']);
-    final address = p['pickup_address'] ?? p['restaurant_name'] ?? "No address provided";
+    final address =
+        p['pickup_address'] ?? p['restaurant_name'] ?? "No address provided";
+
+    // 🟢 Get donation drive title if available
+    final donationDrive =
+        p['donation_drive_title'] ?? p['donation_drive'] ?? "No donation drive linked";
 
     Color statusColor;
     switch (status) {
@@ -154,113 +180,156 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: darwcosGreen))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ---------------- HEADER ----------------
-                      Row(
+          : Center(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    color: Colors.white,
+                    elevation: 5,
+                    shadowColor: darwcosGreen.withOpacity(0.1),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 26),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              status,
-                              style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.bold,
+                          // ---------------- HEADER ----------------
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  status,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
+                              const Spacer(),
+                              const Icon(Icons.recycling,
+                                  color: darwcosGreen, size: 28),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          // ---------------- LOCATION ----------------
+                          Text(
+                            "Pickup Location (Restaurant Address):",
+                            style: TextStyle(
+                              color: darwcosGreen.withOpacity(0.8),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
                           ),
-                          const Spacer(),
-                          const Icon(Icons.recycling,
-                              color: darwcosGreen, size: 26),
+                          const SizedBox(height: 6),
+                          Text(
+                            address,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                height: 1.4,
+                                color: Colors.black87),
+                          ),
+                          const Divider(height: 32),
+
+                          // ---------------- WASTE TYPE ----------------
+                          Text(
+                            "Waste Type:",
+                            style: TextStyle(
+                              color: darwcosGreen.withOpacity(0.8),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(wasteType,
+                              style: const TextStyle(
+                                  fontSize: 16, color: Colors.black87)),
+                          const SizedBox(height: 16),
+
+                          // ---------------- WEIGHT ----------------
+                          Text(
+                            "Weight (kg):",
+                            style: TextStyle(
+                              color: darwcosGreen.withOpacity(0.8),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text("$weight kg",
+                              style: const TextStyle(
+                                  fontSize: 16, color: Colors.black87)),
+                          const SizedBox(height: 16),
+
+                          // ---------------- DATE ----------------
+                          Text(
+                            "Scheduled Pickup Date & Time:",
+                            style: TextStyle(
+                              color: darwcosGreen.withOpacity(0.8),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(scheduled,
+                              style: const TextStyle(
+                                  fontSize: 16, color: Colors.black87)),
+
+                          // ---------------- DONATION DRIVE ----------------
+                          const Divider(height: 32),
+                          Text(
+                            "Donation Drive:",
+                            style: TextStyle(
+                              color: darwcosGreen.withOpacity(0.8),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            donationDrive,
+                            style: const TextStyle(
+                                fontSize: 16, color: Colors.black87),
+                          ),
+                          const SizedBox(height: 30),
+
+                          // ---------------- CANCEL BUTTON ----------------
+                          if (status == "PENDING" || status == "IN_PROGRESS")
+                            Center(
+                              child: ElevatedButton.icon(
+                                onPressed: _cancelPickup,
+                                icon: const Icon(
+                                  Icons.cancel,
+                                  color: Colors.white,
+                                ),
+                                label: const Text(
+                                  "Cancel Pickup",
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: darwcosGreen,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 26, vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-
-                      // ---------------- LOCATION ----------------
-                      Text(
-                        "Pickup Location (Restaurant Address):",
-                        style: TextStyle(
-                          color: darwcosGreen.withOpacity(0.8),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        address,
-                        style: const TextStyle(fontSize: 16, height: 1.4),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ---------------- WASTE TYPE ----------------
-                      Text(
-                        "Waste Type:",
-                        style: TextStyle(
-                          color: darwcosGreen.withOpacity(0.8),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(wasteType, style: const TextStyle(fontSize: 16)),
-                      const SizedBox(height: 16),
-
-                      // ---------------- WEIGHT ----------------
-                      Text(
-                        "Weight (kg):",
-                        style: TextStyle(
-                          color: darwcosGreen.withOpacity(0.8),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text("$weight kg", style: const TextStyle(fontSize: 16)),
-                      const SizedBox(height: 16),
-
-                      // ---------------- DATE ----------------
-                      Text(
-                        "Scheduled Pickup Date & Time:",
-                        style: TextStyle(
-                          color: darwcosGreen.withOpacity(0.8),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(scheduled, style: const TextStyle(fontSize: 16)),
-                      const SizedBox(height: 30),
-
-                      // ---------------- CANCEL BUTTON ----------------
-                      if (status == "PENDING" || status == "IN_PROGRESS")
-                        Center(
-                          child: ElevatedButton.icon(
-                            onPressed: _cancelPickup,
-                            icon: const Icon(Icons.cancel),
-                            label: const Text("Cancel Pickup"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.redAccent,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
               ),

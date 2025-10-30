@@ -20,12 +20,16 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isLoading = false;
+  bool _loadingDrives = true;
   int _points = 0;
 
   String _pickupOption = "now";
   String? _selectedWasteType;
+  int? _selectedDonationDriveId;
 
   static const Color darwcosGreen = Color.fromARGB(255, 1, 87, 4);
+
+  List<dynamic> _donationDrives = [];
 
   final Map<String, String> _wasteTypes = {
     "customer": "Customer Food Waste",
@@ -43,6 +47,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     _selectedWasteType = widget.pickup?['waste_type'];
     _fetchPoints();
     _fetchUserAddress();
+    _fetchDonationDrives();
   }
 
   // ---------------- FETCH USER ADDRESS ----------------
@@ -61,11 +66,28 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     }
   }
 
-  // ---------------- FETCH POINTS ----------------
+  // ---------------- FETCH REWARD POINTS ----------------
   Future<void> _fetchPoints() async {
     final pts = await ApiService.getUserPoints();
     if (!mounted) return;
     setState(() => _points = pts);
+  }
+
+  // ---------------- FETCH DONATION DRIVES ----------------
+  Future<void> _fetchDonationDrives() async {
+    try {
+      final drives = await ApiService.getDonationDrives();
+      setState(() {
+        _donationDrives = drives;
+        _loadingDrives = false;
+      });
+    } catch (e) {
+      debugPrint("⚠️ Failed to load donation drives: $e");
+      setState(() {
+        _donationDrives = [];
+        _loadingDrives = false;
+      });
+    }
   }
 
   // ---------------- DATE/TIME PICKERS ----------------
@@ -88,7 +110,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  // ---------------- CONFIRMATION DIALOG ----------------
+  // ---------------- CONFIRM PICKUP NOW ----------------
   Future<bool> _confirmPickupNow() async {
     return await showDialog<bool>(
           context: context,
@@ -99,13 +121,21 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text("Cancel"),
+                child: const Text(
+                  "Cancel",
+                  style: TextStyle(
+                      color: Colors.black, fontWeight: FontWeight.bold),
+                ),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: darwcosGreen),
-                child: const Text("Yes, Proceed"),
+                style:
+                    ElevatedButton.styleFrom(backgroundColor: darwcosGreen),
+                child: const Text(
+                  "Yes, Proceed",
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
@@ -116,6 +146,12 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   // ---------------- SUBMIT PICKUP ----------------
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedDonationDriveId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a donation drive.")),
+      );
+      return;
+    }
 
     DateTime scheduledDate;
 
@@ -123,7 +159,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
       if (_selectedDate == null || _selectedTime == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text("Please select both date and time for your pickup")),
+              content: Text("Please select both date and time for your pickup.")),
         );
         return;
       }
@@ -136,7 +172,6 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
         _selectedTime!.minute,
       );
     } else {
-      // "Pick up now" option → ask for confirmation
       final confirmed = await _confirmPickupNow();
       if (!confirmed) return;
       scheduledDate = DateTime.now();
@@ -150,6 +185,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
       "pickup_address": _addressController.text,
       "restaurant_name": _addressController.text,
       "waste_type": _selectedWasteType,
+      "donation_drive": _selectedDonationDriveId,
     };
 
     dynamic result;
@@ -176,7 +212,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to save pickup")),
+        const SnackBar(content: Text("Failed to save pickup.")),
       );
     }
   }
@@ -190,8 +226,9 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     }) {
       return InputDecoration(
         labelText: label,
-        prefixIcon:
-            icon != null ? Icon(icon, color: darwcosGreen.withOpacity(0.7)) : null,
+        prefixIcon: icon != null
+            ? Icon(icon, color: darwcosGreen.withOpacity(0.7))
+            : null,
         filled: true,
         fillColor: Colors.grey[100],
         border: OutlineInputBorder(
@@ -204,65 +241,17 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(90),
-        child: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 1,
-          titleSpacing: 0,
-          title: Row(
-            children: [
-              Text(
-                widget.pickup == null ? "Add Pickup" : "Edit Pickup",
-                style: const TextStyle(
-                  color: darwcosGreen,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Center(
-                  child: SizedBox(
-                    width: 300,
-                    height: 40,
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: "Search...",
-                        prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 2,
+        iconTheme: const IconThemeData(color: darwcosGreen),
+        title: const Text(
+          "Request Pickup",
+          style: TextStyle(
+            color: darwcosGreen,
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
           ),
-          actions: [
-            Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: darwcosGreen,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                "$_points pts",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
       body: SingleChildScrollView(
@@ -285,8 +274,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                         controller: _addressController,
                         readOnly: true,
                         decoration: _fieldDecoration(
-                            label: "Restaurant Address",
-                            icon: Icons.location_on),
+                            label: "Restaurant Address", icon: Icons.location_on),
                         validator: (v) =>
                             v == null || v.isEmpty ? "Address missing" : null,
                       ),
@@ -310,11 +298,34 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                             .toList(),
                         onChanged: (v) => setState(() => _selectedWasteType = v),
                         decoration: _fieldDecoration(
-                            label: "Type of Waste",
-                            icon: Icons.delete_outline),
+                            label: "Type of Waste", icon: Icons.delete_outline),
                         validator: (v) =>
                             v == null ? "Select waste type" : null,
                       ),
+                      const SizedBox(height: 16),
+
+                      // 🟢 Donation Drive Dropdown
+                      _loadingDrives
+                          ? const Center(
+                              child:
+                                  CircularProgressIndicator(color: darwcosGreen))
+                          : DropdownButtonFormField<int>(
+                              value: _selectedDonationDriveId,
+                              items: _donationDrives
+                                  .map((drive) => DropdownMenuItem<int>(
+                                        value: drive['id'],
+                                        child: Text(drive['title']),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) =>
+                                  setState(() => _selectedDonationDriveId = v),
+                              decoration: _fieldDecoration(
+                                  label: "Select Donation Drive",
+                                  icon: Icons.volunteer_activism),
+                              validator: (v) => v == null
+                                  ? "Please select a donation drive"
+                                  : null,
+                            ),
                       const SizedBox(height: 24),
 
                       const Text(
@@ -330,14 +341,16 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                         value: "now",
                         activeColor: darwcosGreen,
                         groupValue: _pickupOption,
-                        onChanged: (v) => setState(() => _pickupOption = v!),
+                        onChanged: (v) =>
+                            setState(() => _pickupOption = v!),
                       ),
                       RadioListTile<String>(
                         title: const Text("Schedule a time"),
                         value: "schedule",
                         activeColor: darwcosGreen,
                         groupValue: _pickupOption,
-                        onChanged: (v) => setState(() => _pickupOption = v!),
+                        onChanged: (v) =>
+                            setState(() => _pickupOption = v!),
                       ),
 
                       if (_pickupOption == "schedule") ...[
@@ -377,21 +390,22 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                       const SizedBox(height: 24),
                       _isLoading
                           ? const Center(
-                              child:
-                                  CircularProgressIndicator(color: darwcosGreen),
+                              child: CircularProgressIndicator(
+                                  color: darwcosGreen),
                             )
                           : SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: darwcosGreen,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 16),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                icon: const Icon(Icons.save, color: Colors.white),
+                                icon:
+                                    const Icon(Icons.save, color: Colors.white),
                                 label: Text(
                                   widget.pickup == null
                                       ? "Confirm Pickup"
@@ -410,10 +424,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
               ),
             ),
             const SizedBox(height: 40),
-            Image.asset(
-              "assets/images/black_philippine_eagle.png",
-              height: 40,
-            ),
+            Image.asset("assets/images/black_philippine_eagle.png", height: 40),
           ],
         ),
       ),

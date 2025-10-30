@@ -47,11 +47,12 @@ class ApiService {
     await prefs.remove(_kRefresh);
   }
 
-  static Future<Map<String, String>> _authHeaders() async {
-    final token = await _getAccessToken();
+    static Future<Map<String, String>> _authHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accessToken = prefs.getString('access_token');
     return {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      'Authorization': 'Bearer $accessToken',
     };
   }
 
@@ -361,10 +362,10 @@ class ApiService {
   // ============================
   // 👥 Employees
   // ============================
-  static Future<List<dynamic>> getEmployees() async {
+    static Future<List<dynamic>> getEmployees() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/employees/"),
+        Uri.parse('$baseUrl/employees/'),
         headers: await _authHeaders(),
       );
     });
@@ -372,7 +373,26 @@ class ApiService {
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      throw Exception("Failed to load employees: ${res.statusCode} ${res.body}");
+      debugPrint("❌ Failed to fetch employees: ${res.body}");
+      return [];
+    }
+  }
+
+  // ✅ ADD EMPLOYEE
+  static Future<bool> addEmployee(Map<String, dynamic> body) async {
+    final res = await _withAuthRetry(() async {
+      return http.post(
+        Uri.parse('$baseUrl/employees/'),
+        headers: await _authHeaders(),
+        body: jsonEncode(body),
+      );
+    });
+
+    if (res.statusCode == 201) {
+      return true;
+    } else {
+      debugPrint("❌ Failed to add employee: ${res.body}");
+      return false;
     }
   }
 
@@ -419,7 +439,7 @@ class ApiService {
   }) async {
     final body = <String, dynamic>{
       "plan_id": planId,
-      "method": method,
+      "payment_method": method,
     };
     if (voucherCode != null && voucherCode.isNotEmpty) {
       body["voucher_code"] = voucherCode;
