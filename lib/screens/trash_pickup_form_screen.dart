@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
-//import 'waiting_for_driver_screen.dart';
 
 class TrashPickupFormScreen extends StatefulWidget {
   final Map<String, dynamic>? pickup;
@@ -43,93 +42,34 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
         text: widget.pickup?['trash_weight']?.toString() ?? "");
     _selectedWasteType = widget.pickup?['waste_type'];
     _fetchPoints();
-    _fetchUserAddress(); // ✅ Auto-fill restaurant address
+    _fetchUserAddress();
   }
 
-  // ---------------- FETCH RESTAURANT ADDRESS ----------------
+  // ---------------- FETCH USER ADDRESS ----------------
   Future<void> _fetchUserAddress() async {
-    if (widget.pickup != null) return; // Don’t override on edit
-
+    if (widget.pickup != null) return;
     try {
       final user = await ApiService.getCurrentUser();
       if (user != null) {
-        final restaurantName = user['restaurant_name'] ?? '';
-        final lat = user['latitude'];
-        final lng = user['longitude'];
-
         setState(() {
-          _addressController.text = restaurantName.isNotEmpty
-              ? restaurantName
-              : "Restaurant Address";
+          _addressController.text =
+              user['restaurant_name'] ?? 'Restaurant Address';
         });
-
-        if (lat != null && lng != null) {
-          debugPrint("📍 Restaurant coordinates: $lat, $lng");
-        }
       }
     } catch (e) {
       debugPrint("❌ Failed to fetch user address: $e");
     }
   }
 
-  // ---------------- FETCH REWARD POINTS ----------------
+  // ---------------- FETCH POINTS ----------------
   Future<void> _fetchPoints() async {
     final pts = await ApiService.getUserPoints();
     if (!mounted) return;
     setState(() => _points = pts);
   }
 
-  // ---------------- SUBMIT PICKUP ----------------
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    DateTime finalDateTime = _pickupOption == "now"
-        ? DateTime.now()
-        : DateTime(
-            _selectedDate!.year,
-            _selectedDate!.month,
-            _selectedDate!.day,
-            _selectedTime!.hour,
-            _selectedTime!.minute,
-          );
-
-    Map<String, dynamic> body = {
-      "scheduled_date": finalDateTime.toIso8601String(),
-      "weight_kg": double.parse(_weightController.text),
-      "pickup_address": _addressController.text,
-      "restaurant_name": _addressController.text, // if you want to send restaurant name
-      "waste_type": _selectedWasteType,
-    };
-
-    bool success;
-    if (widget.pickup == null) {
-      success = await ApiService.addTrashPickup(body);
-    } else {
-      success = await ApiService.updateTrashPickup(widget.pickup!['id'], body);
-    }
-
-    setState(() => _isLoading = false);
-
-    if (success) {
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.pickup == null
-              ? "Pickup added successfully!"
-              : "Pickup updated successfully!"),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to save pickup")),
-      );
-    }
-  }
-
   // ---------------- DATE/TIME PICKERS ----------------
-  void _pickDate() async {
+  Future<void> _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -140,7 +80,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  void _pickTime() async {
+  Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
       initialTime: _selectedTime ?? TimeOfDay.now(),
@@ -148,10 +88,103 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
+  // ---------------- CONFIRMATION DIALOG ----------------
+  Future<bool> _confirmPickupNow() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Confirm Pickup Now"),
+            content: const Text(
+                "Would you like to schedule this pickup for right now?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: darwcosGreen),
+                child: const Text("Yes, Proceed"),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  // ---------------- SUBMIT PICKUP ----------------
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    DateTime scheduledDate;
+
+    if (_pickupOption == "schedule") {
+      if (_selectedDate == null || _selectedTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Please select both date and time for your pickup")),
+        );
+        return;
+      }
+
+      scheduledDate = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedTime!.hour,
+        _selectedTime!.minute,
+      );
+    } else {
+      // "Pick up now" option → ask for confirmation
+      final confirmed = await _confirmPickupNow();
+      if (!confirmed) return;
+      scheduledDate = DateTime.now();
+    }
+
+    setState(() => _isLoading = true);
+
+    final Map<String, dynamic> body = {
+      "scheduled_date": scheduledDate.toIso8601String(),
+      "weight_kg": double.parse(_weightController.text),
+      "pickup_address": _addressController.text,
+      "restaurant_name": _addressController.text,
+      "waste_type": _selectedWasteType,
+    };
+
+    dynamic result;
+    if (widget.pickup == null) {
+      final success = await ApiService.addTrashPickup(body);
+      result = success ? {} : null;
+    } else {
+      result = await ApiService.updateTrashPickup(widget.pickup!['id'], body);
+    }
+
+    setState(() => _isLoading = false);
+
+    if (result != null) {
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.pickup == null
+              ? "Pickup scheduled successfully!"
+              : "Pickup updated successfully!"),
+          backgroundColor: darwcosGreen,
+        ),
+      );
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to save pickup")),
+      );
+    }
+  }
+
   // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
-    InputDecoration _clearFieldDecoration({
+    InputDecoration _fieldDecoration({
       required String label,
       IconData? icon,
     }) {
@@ -165,7 +198,6 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
-        floatingLabelBehavior: FloatingLabelBehavior.auto,
         labelStyle: TextStyle(color: Colors.grey[700]),
       );
     }
@@ -177,7 +209,6 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
         child: AppBar(
           backgroundColor: Colors.white,
           elevation: 1,
-          automaticallyImplyLeading: true,
           titleSpacing: 0,
           title: Row(
             children: [
@@ -252,8 +283,8 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                     children: [
                       TextFormField(
                         controller: _addressController,
-                        readOnly: true, // ✅ Auto-filled from user
-                        decoration: _clearFieldDecoration(
+                        readOnly: true,
+                        decoration: _fieldDecoration(
                             label: "Restaurant Address",
                             icon: Icons.location_on),
                         validator: (v) =>
@@ -262,7 +293,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _weightController,
-                        decoration: _clearFieldDecoration(
+                        decoration: _fieldDecoration(
                             label: "Weight (kg)", icon: Icons.scale),
                         keyboardType: TextInputType.number,
                         validator: (v) =>
@@ -278,7 +309,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                                 ))
                             .toList(),
                         onChanged: (v) => setState(() => _selectedWasteType = v),
-                        decoration: _clearFieldDecoration(
+                        decoration: _fieldDecoration(
                             label: "Type of Waste",
                             icon: Icons.delete_outline),
                         validator: (v) =>
@@ -346,25 +377,24 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                       const SizedBox(height: 24),
                       _isLoading
                           ? const Center(
-                              child: CircularProgressIndicator(
-                                  color: darwcosGreen),
+                              child:
+                                  CircularProgressIndicator(color: darwcosGreen),
                             )
                           : SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: darwcosGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 16),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                icon: const Icon(Icons.save,
-                                    color: Colors.white),
+                                icon: const Icon(Icons.save, color: Colors.white),
                                 label: Text(
                                   widget.pickup == null
-                                      ? "Add Pickup"
+                                      ? "Confirm Pickup"
                                       : "Save Changes",
                                   style: const TextStyle(
                                     color: Colors.white,

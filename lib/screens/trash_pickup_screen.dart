@@ -1,4 +1,3 @@
-// lib/screens/trash_pickup_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
@@ -24,50 +23,58 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
     _fetchAll();
   }
 
-  // -------------------- FETCH PICKUPS + POINTS --------------------
+  // ---------------- FETCH ALL PICKUPS ----------------
   Future<void> _fetchAll() async {
     setState(() => _isLoading = true);
-
-    int pts = _points; // keep current on failure
-    List<dynamic> list = pickups; // keep current on failure
-
-    // Run both with independent error handling
     try {
-      pts = await ApiService.getUserPoints();
-    } catch (_) {
-      // silently ignore points failure; optional: show a small SnackBar once
-    }
-
-    try {
-      list = await ApiService.getTrashPickups();
+      final pts = await ApiService.getUserPoints();
+      final list = await ApiService.getTrashPickupsAuto();
+      setState(() {
+        _points = pts;
+        pickups = list;
+      });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to load pickups: $e")),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    if (!mounted) return;
-    setState(() {
-      _points = pts;
-      pickups = list;
-      _isLoading = false;
-    });
   }
 
-  // -------------------- NAVIGATE TO DETAILS --------------------
+  // ---------------- OPEN PICKUP DETAIL ----------------
   void _openDetail(Map<String, dynamic> pickup) async {
-    final updated = await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PickupDetailScreen(pickup: pickup),
       ),
     );
-    if (updated == true) _fetchAll();
+
+    if (result is Map && result['refresh'] == true) {
+      final cancelledPickup = result['pickup'];
+
+      setState(() {
+        // ✅ Instantly remove cancelled pickup from list
+        pickups.removeWhere((p) => p['id'] == cancelledPickup['id']);
+      });
+
+      // ✅ Optionally re-fetch latest data
+      _fetchAll();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Pickup cancelled successfully."),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
-  // -------------------- ADD NEW PICKUP --------------------
+  // ---------------- ADD NEW PICKUP ----------------
   void _addPickup() async {
     final created = await Navigator.push(
       context,
@@ -78,7 +85,7 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
     if (created == true) _fetchAll();
   }
 
-  // -------------------- STATUS COLOR & ICON HELPERS --------------------
+  // ---------------- STATUS COLOR ----------------
   Color _getStatusColor(String status) {
     switch (status.toUpperCase()) {
       case "PENDING":
@@ -94,6 +101,7 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
     }
   }
 
+  // ---------------- STATUS ICON ----------------
   IconData _getStatusIcon(String status) {
     switch (status.toUpperCase()) {
       case "PENDING":
@@ -109,7 +117,21 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
     }
   }
 
-  // -------------------- UI --------------------
+  // ---------------- FORMAT DATE ----------------
+  String _formatDate(dynamic dateString) {
+    if (dateString == null ||
+        dateString.toString().isEmpty ||
+        dateString.toString().toLowerCase() == "null") {
+      return "No schedule";
+    }
+    try {
+      final parsed = DateTime.parse(dateString.toString());
+      return DateFormat('MMM dd, yyyy • hh:mm a').format(parsed);
+    } catch (_) {
+      return "Invalid date";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,8 +165,6 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
           ),
         ],
       ),
-
-      // Floating Action Button
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addPickup,
         backgroundColor: darwcosGreen,
@@ -157,8 +177,6 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
           ),
         ),
       ),
-
-      // Body
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: darwcosGreen),
@@ -177,8 +195,8 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
                   onRefresh: _fetchAll,
                   child: ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     itemCount: pickups.length,
                     itemBuilder: (context, i) {
                       final p = pickups[i];
@@ -222,7 +240,7 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        p["address"] ??
+                                        p["pickup_address"] ??
                                             p["restaurant_name"] ??
                                             "No address provided",
                                         style: const TextStyle(
@@ -233,10 +251,7 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        p["scheduled_date"] != null
-                                            ? DateFormat('MMM dd, yyyy • hh:mm a')
-                                                .format(DateTime.parse(p["scheduled_date"]))
-                                            : "No schedule",
+                                        _formatDate(p["scheduled_date"]),
                                         style: const TextStyle(
                                           color: Colors.black54,
                                           fontSize: 13,

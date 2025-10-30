@@ -17,7 +17,9 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
 
   // ---------------- CANCEL PICKUP ----------------
   Future<void> _cancelPickup() async {
-    final id = widget.pickup['id'] as int?;
+    final dynamic rawId = widget.pickup['id'];
+    final int? id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+
     if (id == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -26,27 +28,96 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
       return;
     }
 
-    // Call your API (PATCH to set status = CANCELLED)
-    final ok = await ApiService.updateTrashPickup(id, {"status": "CANCELLED"});
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Confirm Cancellation"),
+        content: const Text(
+          "Are you sure you want to cancel this pickup?\nThis action cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("No", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Yes, Cancel"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    final updatedPickup =
+        await ApiService.updateTrashPickup(id, {"status": "CANCELLED"});
+
     if (!mounted) return;
-    if (ok) {
-      final updatedPickup = {
-        ...widget.pickup,
-        "status": "CANCELLED",
-      };
-      Navigator.pop(context, {"refresh": true, "pickup": updatedPickup});
+    setState(() => _isLoading = false);
+
+    if (updatedPickup == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Failed to cancel pickup. Please try again."),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
     }
+
+    final result = {
+      ...widget.pickup,
+      "status": "CANCELLED",
+      "id": (updatedPickup as Map<String, dynamic>?)?["id"] ?? id,
+    };
+
+    Navigator.pop(context, {"refresh": true, "pickup": result});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Pickup cancelled successfully."),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+
+  // ---------------- SAFE DATE FORMATTER ----------------
+  String _formatDate(dynamic dateString, {dynamic fallbackDate}) {
+    try {
+      if (dateString != null &&
+          dateString.toString().isNotEmpty &&
+          dateString.toString().toLowerCase() != "null") {
+        final parsed = DateTime.parse(dateString.toString());
+        return DateFormat('MMM dd, yyyy • hh:mm a').format(parsed);
+      }
+
+      if (fallbackDate != null) {
+        final parsed = DateTime.parse(fallbackDate.toString());
+        return DateFormat('MMM dd, yyyy • hh:mm a').format(parsed);
+      }
+
+      return "No scheduled date";
+    } catch (e) {
+      return "Invalid date";
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = widget.pickup;
+
     final status = p['status']?.toString().toUpperCase() ?? "UNKNOWN";
     final wasteType = p['waste_type'] ?? "Unknown";
-    final weight = p['trash_weight']?.toString() ?? "0";
-    final scheduled = p['scheduled_date'] != null
-        ? DateFormat('MMM dd, yyyy • hh:mm a').format(DateTime.parse(p['scheduled_date']))
-        : "No schedule";
-    final address = p['address'] ?? p['restaurant_name'] ?? "No address provided";
+    final weight = p['weight_kg']?.toString() ?? "0";
+    final scheduled = _formatDate(p['scheduled_date'] ?? p['created_at']);
+    final address = p['pickup_address'] ?? p['restaurant_name'] ?? "No address provided";
 
     Color statusColor;
     switch (status) {
@@ -95,7 +166,7 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header
+                      // ---------------- HEADER ----------------
                       Row(
                         children: [
                           Container(
@@ -114,27 +185,29 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                             ),
                           ),
                           const Spacer(),
-                          Icon(Icons.recycling, color: darwcosGreen),
+                          const Icon(Icons.recycling,
+                              color: darwcosGreen, size: 26),
                         ],
                       ),
                       const SizedBox(height: 20),
 
-                      // Address
+                      // ---------------- LOCATION ----------------
                       Text(
-                        "Address:",
+                        "Pickup Location (Restaurant Address):",
                         style: TextStyle(
                           color: darwcosGreen.withOpacity(0.8),
                           fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         address,
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(fontSize: 16, height: 1.4),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                      // Waste type
+                      // ---------------- WASTE TYPE ----------------
                       Text(
                         "Waste Type:",
                         style: TextStyle(
@@ -143,13 +216,10 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        wasteType,
-                        style: const TextStyle(fontSize: 16),
-                      ),
+                      Text(wasteType, style: const TextStyle(fontSize: 16)),
                       const SizedBox(height: 16),
 
-                      // Weight
+                      // ---------------- WEIGHT ----------------
                       Text(
                         "Weight (kg):",
                         style: TextStyle(
@@ -158,37 +228,32 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        weight,
-                        style: const TextStyle(fontSize: 16),
-                      ),
+                      Text("$weight kg", style: const TextStyle(fontSize: 16)),
                       const SizedBox(height: 16),
 
-                      // Scheduled Date
+                      // ---------------- DATE ----------------
                       Text(
-                        "Scheduled Date:",
+                        "Scheduled Pickup Date & Time:",
                         style: TextStyle(
                           color: darwcosGreen.withOpacity(0.8),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        scheduled,
-                        style: const TextStyle(fontSize: 16),
-                      ),
+                      Text(scheduled, style: const TextStyle(fontSize: 16)),
                       const SizedBox(height: 30),
 
-                      // Cancel Button (if pending or in progress)
+                      // ---------------- CANCEL BUTTON ----------------
                       if (status == "PENDING" || status == "IN_PROGRESS")
                         Center(
                           child: ElevatedButton.icon(
-                          onPressed: _cancelPickup,
-                          icon: const Icon(Icons.cancel),
-                          label: const Text("Cancel Pickup"),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent,
+                            onPressed: _cancelPickup,
+                            icon: const Icon(Icons.cancel),
+                            label: const Text("Cancel Pickup"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 14),
+                                  horizontal: 24, vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),

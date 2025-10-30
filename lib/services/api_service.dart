@@ -224,21 +224,34 @@ class ApiService {
     return createTrashPickup(body);
   }
 
-  static Future<bool> updateTrashPickup(int id, Map<String, dynamic> body) async {
-    final res = await _withAuthRetry(() async {
-      return http.patch(
-        Uri.parse('$baseUrl/trash_pickups/$id/'),
-        headers: await _authHeaders(),
-        body: jsonEncode(body),
-      );
-    });
+  static Future<Map<String, dynamic>?> updateTrashPickup(
+      int id, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
 
-    if (res.statusCode == 200) {
-      debugPrint("✅ Pickup $id updated successfully");
-      return true;
-    } else {
-      debugPrint("❌ Failed to update pickup (${res.statusCode}): ${res.body}");
-      return false;
+      final response = await http.patch(
+        Uri.parse('$baseUrl/trash_pickups/$id/'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(data),
+      );
+
+      if (response.statusCode == 200 ||
+          response.statusCode == 201 ||
+          response.statusCode == 202) {
+        final body = jsonDecode(response.body);
+        debugPrint("✅ Pickup #$id updated successfully → ${body['status']}");
+        return body;
+      } else {
+        debugPrint("❌ Failed to update pickup #$id: ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      debugPrint("🚨 Error updating pickup #$id: $e");
+      return null;
     }
   }
 
@@ -515,3 +528,6 @@ class ApiService {
     }
   }
 }
+
+
+
