@@ -527,6 +527,29 @@ class ApiService {
       throw Exception("Failed to submit donation: ${res.statusCode} ${res.body}");
     }
   }
+
+  // ---------------- FETCH MY REWARDS ----------------
+  static Future<List<dynamic>> getMyRewards() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+    final url = Uri.parse('$baseUrl/rewards/my_rewards/'); // adjust if needed
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data is List ? data : [];
+    } else {
+      debugPrint("❌ Failed to load my rewards: ${response.body}");
+      return [];
+    }
+  }
 }
 
 

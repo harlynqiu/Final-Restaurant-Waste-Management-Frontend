@@ -53,21 +53,12 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
     );
 
     if (result is Map && result['refresh'] == true) {
-      final cancelledPickup = result['pickup'];
-
-      setState(() {
-        // ✅ Instantly remove cancelled pickup from list
-        pickups.removeWhere((p) => p['id'] == cancelledPickup['id']);
-      });
-
-      // ✅ Optionally re-fetch latest data
       _fetchAll();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Pickup cancelled successfully."),
-            backgroundColor: Colors.redAccent,
+            content: Text("Pickup updated successfully."),
+            backgroundColor: Colors.green,
           ),
         );
       }
@@ -132,160 +123,194 @@ class _TrashPickupScreenState extends State<TrashPickupScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
-        iconTheme: const IconThemeData(color: darwcosGreen),
-        title: const Text(
-          "Trash Pickups",
-          style: TextStyle(
-            color: darwcosGreen,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Chip(
-              label: Text(
-                "$_points pts",
-                style: const TextStyle(
-                  color: darwcosGreen,
-                  fontWeight: FontWeight.bold,
+  // ---------------- BUILD PICKUP CARD ----------------
+  Widget _buildPickupCard(Map<String, dynamic> p) {
+    final status = p["status"]?.toString().toUpperCase() ?? "UNKNOWN";
+    final color = _getStatusColor(status);
+    final icon = _getStatusIcon(status);
+
+    return Card(
+      elevation: 3,
+      shadowColor: darwcosGreen.withOpacity(0.1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _openDetail(p),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                height: 45,
+                width: 45,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      p["pickup_address"] ??
+                          p["restaurant_name"] ??
+                          "No address provided",
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatDate(p["scheduled_date"]),
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              backgroundColor: darwcosGreen.withOpacity(0.1),
-              side: const BorderSide(color: darwcosGreen),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addPickup,
-        backgroundColor: darwcosGreen,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          "New Pickup",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  status,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: darwcosGreen),
-            )
-          : pickups.isEmpty
-              ? const Center(
+    );
+  }
+
+  // ---------------- FILTERS FOR ACTIVE / PAST ----------------
+  List<dynamic> get _activePickups => pickups
+      .where((p) =>
+          p["status"] == "pending" || p["status"] == "in_progress")
+      .toList();
+
+  List<dynamic> get _pastPickups => pickups
+      .where((p) =>
+          p["status"] == "completed" || p["status"] == "cancelled")
+      .toList();
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2, // two tabs
+      child: Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 2,
+          iconTheme: const IconThemeData(color: darwcosGreen),
+          title: const Text(
+            "Trash Pickups",
+            style: TextStyle(
+              color: darwcosGreen,
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
+            ),
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Chip(
+                label: Text(
+                  "$_points pts",
+                  style: const TextStyle(
+                    color: darwcosGreen,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                backgroundColor: darwcosGreen.withOpacity(0.1),
+                side: const BorderSide(color: darwcosGreen),
+              ),
+            ),
+          ],
+          bottom: const TabBar(
+            indicatorColor: darwcosGreen,
+            labelColor: darwcosGreen,
+            unselectedLabelColor: Colors.black54,
+            labelStyle: TextStyle(fontWeight: FontWeight.bold),
+            tabs: [
+              Tab(text: "New Pickups"),
+              Tab(text: "Past Transactions"),
+            ],
+          ),
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _addPickup,
+          backgroundColor: darwcosGreen,
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text(
+            "New Pickup",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        body: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: darwcosGreen),
+              )
+            : TabBarView(
+                children: [
+                  // 🟢 TAB 1: ACTIVE PICKUPS
+                  _buildPickupList(_activePickups, "No active pickups."),
+
+                  // ⚫ TAB 2: PAST TRANSACTIONS
+                  _buildPickupList(_pastPickups, "No past transactions."),
+                ],
+              ),
+      ),
+    );
+  }
+
+  // ---------------- BUILD LIST FOR EACH TAB ----------------
+  Widget _buildPickupList(List<dynamic> list, String emptyMessage) {
+    return RefreshIndicator(
+      onRefresh: _fetchAll,
+      child: list.isEmpty
+          ? ListView(
+              children: [
+                const SizedBox(height: 100),
+                Center(
                   child: Text(
-                    "No pickups yet.",
-                    style: TextStyle(
+                    emptyMessage,
+                    style: const TextStyle(
                       fontSize: 16,
                       color: Colors.black54,
                     ),
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _fetchAll,
-                  child: ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    itemCount: pickups.length,
-                    itemBuilder: (context, i) {
-                      final p = pickups[i];
-                      final status =
-                          p["status"]?.toString().toUpperCase() ?? "UNKNOWN";
-                      final color = _getStatusColor(status);
-                      final icon = _getStatusIcon(status);
-
-                      return Card(
-                        elevation: 4,
-                        shadowColor: darwcosGreen.withOpacity(0.15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        margin: const EdgeInsets.only(bottom: 14),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () => _openDetail(p),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                // Status Icon
-                                Container(
-                                  height: 50,
-                                  width: 50,
-                                  decoration: BoxDecoration(
-                                    color: color.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(icon, color: color, size: 28),
-                                ),
-                                const SizedBox(width: 14),
-
-                                // Address and date
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        p["pickup_address"] ??
-                                            p["restaurant_name"] ??
-                                            "No address provided",
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _formatDate(p["scheduled_date"]),
-                                        style: const TextStyle(
-                                          color: Colors.black54,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Status Badge
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: color.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    status,
-                                    style: TextStyle(
-                                      color: color,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
                 ),
+              ],
+            )
+          : ListView.builder(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              itemCount: list.length,
+              itemBuilder: (context, i) => _buildPickupCard(list[i]),
+            ),
     );
   }
 }
