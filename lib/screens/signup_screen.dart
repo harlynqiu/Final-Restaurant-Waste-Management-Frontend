@@ -230,7 +230,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // 🧾 Register user
+  // 🧾 Register user (fixed call)
   Future<void> _register() async {
     if (_restaurantController.text.trim().isEmpty ||
         _addressController.text.trim().isEmpty) {
@@ -247,15 +247,15 @@ class _SignupScreenState extends State<SignupScreen> {
 
     setState(() => _isLoading = true);
 
+    // ✅ Corrected: Use named parameters
     bool success = await ApiService.register(
-      _usernameController.text.trim(),
-      _passwordController.text.trim(),
-      email: _emailController.text.trim().isEmpty
-          ? null
-          : _emailController.text.trim(),
+      username: _usernameController.text.trim(),
+      password: _passwordController.text.trim(),
+      email: _emailController.text.trim(),
+      name: _usernameController.text.trim(),
+      position: "Owner",
       restaurantName: _restaurantController.text.trim(),
-      latitude: _selectedLocation!.latitude,
-      longitude: _selectedLocation!.longitude,
+      address: _addressController.text.trim(),
     );
 
     setState(() => _isLoading = false);
@@ -324,7 +324,6 @@ class _SignupScreenState extends State<SignupScreen> {
                         Icons.store),
                     const SizedBox(height: 16),
 
-                    // Address field
                     TextField(
                       controller: _addressController,
                       readOnly: true,
@@ -342,12 +341,10 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Submit button
                     SizedBox(
                       width: double.infinity,
                       child: _isLoading
-                          ? const CircularProgressIndicator(
-                              color: darwcosGreen)
+                          ? const CircularProgressIndicator(color: darwcosGreen)
                           : ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: darwcosGreen,
@@ -367,7 +364,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Login link
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -401,7 +397,6 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // Helper widget
   Widget _buildTextField(String label, TextEditingController controller,
       IconData icon,
       {bool obscure = false}) {
@@ -415,8 +410,4 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
   }
-
-  
-
-
 }

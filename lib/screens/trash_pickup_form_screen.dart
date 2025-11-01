@@ -74,21 +74,27 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   }
 
   // ---------------- FETCH DONATION DRIVES ----------------
-  Future<void> _fetchDonationDrives() async {
-    try {
-      final drives = await ApiService.getDonationDrives();
-      setState(() {
-        _donationDrives = drives;
-        _loadingDrives = false;
-      });
-    } catch (e) {
-      debugPrint("⚠️ Failed to load donation drives: $e");
-      setState(() {
-        _donationDrives = [];
-        _loadingDrives = false;
-      });
-    }
+Future<void> _fetchDonationDrives() async {
+  try {
+    final drives = await ApiService.getDonationDrives();
+    debugPrint("✅ Donation drives response: $drives");
+    setState(() {
+      _donationDrives = drives.map((d) {
+        return {
+          "id": int.tryParse(d["id"].toString()) ?? 0,
+          "title": d["title"] ?? d["name"] ?? "Untitled Drive",
+        };
+      }).toList();
+      _loadingDrives = false;
+    });
+  } catch (e) {
+    debugPrint("⚠️ Failed to load donation drives: $e");
+    setState(() {
+      _donationDrives = [];
+      _loadingDrives = false;
+    });
   }
+}
 
   // ---------------- DATE/TIME PICKERS ----------------
   Future<void> _pickDate() async {

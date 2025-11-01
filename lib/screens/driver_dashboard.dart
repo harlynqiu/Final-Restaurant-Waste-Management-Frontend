@@ -1,11 +1,98 @@
+// lib/screens/driver_dashboard.dart
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
-class DriverDashboardScreen extends StatelessWidget {
+class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key});
 
   @override
+  State<DriverDashboardScreen> createState() => _DriverDashboardScreenState();
+}
+
+class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
+  static const Color darwcosGreen = Color(0xFF015704);
+  bool _loading = true;
+  String _error = "";
+  Map<String, dynamic>? _driver;
+
+  // --------------------------
+  // Load driver profile
+  // --------------------------
+  Future<void> _loadDriver() async {
+    try {
+      final data = await ApiService.getCurrentDriver();
+      if (!mounted) return;
+      setState(() {
+        _driver = data;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = "Failed to load driver profile: $e";
+        _loading = false;
+      });
+    }
+  }
+
+  // --------------------------
+  // Update driver status
+  // --------------------------
+  Future<void> _updateStatus(String newStatus) async {
+    try {
+      final success = await ApiService.updateDriverStatus(newStatus);
+      if (success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("✅ Status updated to $newStatus")),
+        );
+        _loadDriver(); // refresh
+      } else {
+        throw Exception("Server rejected the update");
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("❌ Failed: $e")));
+    }
+  }
+
+  // --------------------------
+  // Logout
+  // --------------------------
+  Future<void> _logout() async {
+    await ApiService.logout();
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDriver();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const Color darwcosGreen = Color(0xFF015704);
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: darwcosGreen,
+          title: const Text("Driver Dashboard"),
+        ),
+        body: Center(child: Text(_error)),
+      );
+    }
+
+    final name = _driver?["full_name"] ?? "Driver";
+    final status = _driver?["status"] ?? "unknown";
+    final vehicle = _driver?["vehicle_type"] ?? "-";
+    final plate = _driver?["plate_number"] ?? "-";
 
     return Scaffold(
       appBar: AppBar(
@@ -23,44 +110,36 @@ class DriverDashboardScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         children: [
           // Greeting
-          const Text(
-            "Welcome, Driver 👋",
-            style: TextStyle(
+          Text(
+            "Welcome, $name 👋",
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
 
-          // Card: Today's assignment
+          // Vehicle info
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            elevation: 4,
+            elevation: 3,
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.local_shipping, size: 40, color: Colors.black54),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          "Next Pickup",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          "You have 1 assigned pickup waiting.",
-                          style: TextStyle(color: Colors.black54),
-                        ),
-                      ],
+                  const Text(
+                    "Vehicle Information",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const Icon(Icons.chevron_right),
+                  const Divider(),
+                  Text("Type: $vehicle"),
+                  Text("Plate No: $plate"),
                 ],
               ),
             ),
@@ -68,33 +147,61 @@ class DriverDashboardScreen extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Card: Status / Go Online
+          // Current Status
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            elevation: 4,
+            elevation: 3,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(Icons.radio_button_on, color: darwcosGreen),
+                  Icon(Icons.radio_button_on,
+                      color: status == "available"
+                          ? Colors.green
+                          : status == "on_pickup"
+                              ? Colors.orange
+                              : Colors.grey),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
-                          "Status: Online",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          "Status: ${status[0].toUpperCase()}${status.substring(1)}",
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          "You are available to receive pickups.",
-                          style: TextStyle(color: Colors.black54),
+                          status == "available"
+                              ? "You are available for new pickups."
+                              : status == "on_pickup"
+                                  ? "You are currently handling a pickup."
+                                  : "You are offline.",
+                          style: const TextStyle(color: Colors.black54),
                         ),
                       ],
                     ),
+                  ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) => _updateStatus(value),
+                    icon: const Icon(Icons.edit, color: Colors.black54),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: "available",
+                        child: Text("Available"),
+                      ),
+                      const PopupMenuItem(
+                        value: "on_pickup",
+                        child: Text("On Pickup"),
+                      ),
+                      const PopupMenuItem(
+                        value: "inactive",
+                        child: Text("Inactive"),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -103,7 +210,7 @@ class DriverDashboardScreen extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Logout button to go back to login
+          // Logout
           SizedBox(
             height: 48,
             child: ElevatedButton.icon(
@@ -121,9 +228,7 @@ class DriverDashboardScreen extends StatelessWidget {
                   color: Colors.white,
                 ),
               ),
-              onPressed: () {
-                Navigator.pushReplacementNamed(context, '/login');
-              },
+              onPressed: _logout,
             ),
           ),
         ],

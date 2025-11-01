@@ -10,6 +10,7 @@ class ApiService {
   // ============================
   // Desktop/Web (Django on same machine):
   static const String baseUrl = "http://127.0.0.1:8000/api";
+   // static const String baseUrl = "http://192.168.254.191/api";
   // Android emulator:
   // static const String baseUrl = "http://10.0.2.2:8000/api";
   // Physical phone on same Wi-Fi (replace with your PC's LAN IP):
@@ -71,6 +72,30 @@ class ApiService {
     return res;
   }
 
+  static Future<List<dynamic>> getAssignedPickups() async {
+    final res = await _withAuthRetry(() async {
+      return await http.get(
+        Uri.parse("$baseUrl/trash_pickups/"),
+        headers: await _authHeaders(),
+      );
+    });
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      if (data is List) return data;
+      if (data is Map && data.containsKey('results')) return data['results'];
+      return [];
+    } else {
+      debugPrint("❌ Failed to load assigned pickups: ${res.statusCode}");
+      return [];
+    }
+  }
+
+
+  // ✅ keep this function INSIDE the class, not outside the final brace!
+
+  
+
   // ============================
   // 👤 Auth
   // ============================
@@ -119,39 +144,52 @@ class ApiService {
   }
 
   // ============================
-  // 🧾 Register (SignupScreen)
+  // 👤 REGISTER USER / EMPLOYEE (Updated)
   // ============================
-  static Future<bool> register(
-    String username,
-    String password, {
-    String? email,
-    required String restaurantName,
-    required double latitude,
-    required double longitude,
+  static Future<bool> register({
+    required String username,
+    required String password,
+    required String email,
+    required String name,
+    required String position,
+    String? restaurantName,
+    String? address,
   }) async {
+    final url = Uri.parse("$baseUrl/employees/register/");
+
+    final body = jsonEncode({
+      "username": username.trim(),
+      "password": password.trim(),
+      "email": email.trim(),
+      "name": name.trim(),
+      "position": position.trim(),
+      "restaurant_name": restaurantName?.trim() ?? "",
+      "address": address?.trim() ?? "",
+    });
+
     try {
       final response = await http.post(
-        Uri.parse("$baseUrl/employees/register/"),
+        url,
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "username": username,
-          "password": password,
-          "email": email,
-          "restaurant_name": restaurantName,
-          "latitude": latitude,
-          "longitude": longitude,
-        }),
+        body: body,
       );
 
       if (response.statusCode == 201) {
-        debugPrint("✅ Registration successful!");
+        debugPrint("✅ Registration successful → ${response.body}");
         return true;
+      } else if (response.statusCode == 400) {
+        final data = jsonDecode(response.body);
+        debugPrint("⚠️ Validation error: $data");
+        return false;
+      } else if (response.statusCode == 405) {
+        debugPrint("🚫 Method Not Allowed — check your Django routes for /api/employees/register/");
+        return false;
       } else {
         debugPrint("❌ Registration failed (${response.statusCode}): ${response.body}");
         return false;
       }
     } catch (e) {
-      debugPrint("⚠️ Registration error: $e");
+      debugPrint("🔥 Registration error: $e");
       return false;
     }
   }
@@ -362,39 +400,57 @@ class ApiService {
   // ============================
   // 👥 Employees
   // ============================
-    static Future<List<dynamic>> getEmployees() async {
-    final res = await _withAuthRetry(() async {
-      return http.get(
-        Uri.parse('$baseUrl/employees/'),
-        headers: await _authHeaders(),
-      );
-    });
+   static Future<List<dynamic>> getEmployees() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('access_token');
 
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
-    } else {
-      debugPrint("❌ Failed to fetch employees: ${res.body}");
-      return [];
+  final response = await http.get(
+    Uri.parse('$baseUrl/employees/'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token', // ✅ required for auth
+    },
+  );
+
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body);
+  } else {
+    debugPrint('❌ Failed to load employees: ${response.statusCode} ${response.body}');
+    throw Exception('Failed to load employees');
+  }
+}
+
+  static Future<void> addEmployee({
+    required String name,
+    required String email,
+    required String position,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/employees/'), // ✅ Correct endpoint
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'username': email.split('@')[0], // required for backend
+        'password': 'default123',
+        'name': name,
+        'email': email,
+        'position': position,
+        'restaurant_name': 'My Restaurant',
+        'address': 'Davao City',
+      }),
+    );
+
+    if (response.statusCode != 201) {
+      debugPrint('❌ Failed to add employee: ${response.statusCode} ${response.body}');
+      throw Exception('Failed to add employee');
     }
   }
 
-  // ✅ ADD EMPLOYEE
-  static Future<bool> addEmployee(Map<String, dynamic> body) async {
-    final res = await _withAuthRetry(() async {
-      return http.post(
-        Uri.parse('$baseUrl/employees/'),
-        headers: await _authHeaders(),
-        body: jsonEncode(body),
-      );
-    });
-
-    if (res.statusCode == 201) {
-      return true;
-    } else {
-      debugPrint("❌ Failed to add employee: ${res.body}");
-      return false;
-    }
-  }
 
   // ============================
   // 💳 Subscriptions
@@ -503,7 +559,16 @@ class ApiService {
     });
 
     if (res.statusCode == 200) {
-      return jsonDecode(res.body);
+      final body = jsonDecode(res.body);
+
+      // ✅ Ensure it always returns a list
+      if (body is Map && body.containsKey("results")) {
+        return body["results"];
+      } else if (body is List) {
+        return body;
+      } else {
+        throw Exception("Unexpected donation drive format");
+      }
     } else {
       throw Exception("Failed to load donation drives: ${res.statusCode}");
     }
@@ -570,7 +635,64 @@ class ApiService {
       return [];
     }
   }
+
+  // ============================
+  // 🚗 Drivers
+  // ============================
+
+  // Fetch the logged-in driver profile
+  static Future<Map<String, dynamic>?> getCurrentDriver() async {
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse("$baseUrl/drivers/me/"),
+        headers: await _authHeaders(),
+      );
+    });
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else {
+      debugPrint("❌ Failed to load driver: ${res.statusCode}");
+      return null;
+    }
+  }
+
+  // Update driver availability status
+  static Future<bool> updateDriverStatus(String newStatus) async {
+    final res = await _withAuthRetry(() async {
+      return http.patch(
+        Uri.parse("$baseUrl/drivers/me/status/"),
+        headers: await _authHeaders(),
+        body: jsonEncode({"status": newStatus}),
+      );
+    });
+
+    return res.statusCode == 200;
+  }
+
+
+    // 🔐 Helper – builds request headers
+    static Future<Map<String, String>> _getHeaders() async {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("access_token"); // adjust key name if different
+      return {
+        "Content-Type": "application/json",
+        if (token != null) "Authorization": "Bearer $token",
+      };
+    }
+
+    // 👤 Fetch driver profile
+    static Future<Map<String, dynamic>> getDriverProfile() async {
+      final response = await http.get(
+        Uri.parse('$baseUrl/drivers/me/'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load driver profile');
+      }
+    }
+  
 }
-
-
-

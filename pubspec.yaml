@@ -17,7 +17,7 @@ dependencies:
   shared_preferences: ^2.2.2
   flutter_secure_storage: ^9.0.0
   latlong2: ^0.9.0
-  geolocator: ^11.0.0
+  geolocator: ^14.0.2
   geocoding: ^3.0.0
   flutter_map: ^6.1.0
 
@@ -58,6 +58,7 @@ flutter:
      - assets/images/payment.png
      - assets/images/pickup.png
      - assets/images/davao_thermo_corp.png
+     - assets/images/add_employee.png
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

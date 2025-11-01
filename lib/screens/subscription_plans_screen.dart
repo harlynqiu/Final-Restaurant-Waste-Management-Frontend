@@ -1,3 +1,4 @@
+// lib/screens/subscription_plans_screen.dart
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
@@ -10,12 +11,23 @@ class SubscriptionPlansScreen extends StatefulWidget {
 }
 
 class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
+  // 🔠 Helper: Capitalize each word properly
+  String _capitalizeEachWord(String text) {
+    return text
+        .split(' ')
+        .map((word) =>
+            word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}' : '')
+        .join(' ');
+  }
+
   bool _loading = true;
   List<dynamic> _plans = [];
+  Map<String, dynamic>? _mySubscription;
   String _error = "";
 
   static const Color darwcosGreen = Color(0xFF015704);
 
+  // Local fallback plans (used if API fails)
   final List<Map<String, dynamic>> fallbackPlans = [
     {
       "id": 1,
@@ -52,25 +64,31 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPlans();
+    _loadAllData();
   }
 
-  Future<void> _loadPlans() async {
+  Future<void> _loadAllData() async {
     try {
-      final data = await ApiService.getPlans();
+      final plans = await ApiService.getPlans();
+      final sub = await ApiService.getMySubscription();
       setState(() {
-        _plans = (data.isNotEmpty ? data : fallbackPlans);
+        _plans = plans.isNotEmpty ? plans : fallbackPlans;
+        _mySubscription = sub;
         _loading = false;
       });
     } catch (e) {
       setState(() {
         _plans = fallbackPlans;
+        _mySubscription = null;
         _loading = false;
-        _error = "Failed to load plans. Showing default plans.";
+        _error = "Failed to load plans. Showing default data.";
       });
     }
   }
 
+  // ------------------------------------------------------------
+  // 🧾 Subscription Flow
+  // ------------------------------------------------------------
   Future<void> _showPaymentDialog(int planId, String planName) async {
     String? selectedMethod;
     final TextEditingController voucherController = TextEditingController();
@@ -81,7 +99,7 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
         return AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text("Subscribe to $planName"),
+          title: Text("Subscribe to ${_capitalizeEachWord(planName)}"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -117,7 +135,8 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
               child: const Text("Cancel"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: darwcosGreen),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: darwcosGreen),
               onPressed: () {
                 if (selectedMethod == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -159,26 +178,30 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
 
       final subscription = result["subscription"];
       final discount = subscription?["discount_applied"] ?? 0;
-      final total = subscription?["final_amount"] ?? subscription?["plan_price"];
+      final total =
+          subscription?["final_amount"] ?? subscription?["plan_price"];
       final endDate =
           subscription?["end_date"]?.toString().substring(0, 10) ?? "-";
 
       await _showReceiptDialog(
-        planName: planName,
+        planName: _capitalizeEachWord(planName),
         method: method,
         price: total,
         endDate: endDate,
         discount: discount,
         voucherCode: voucherCode,
       );
+      _loadAllData(); // refresh after success
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Subscribe failed: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Subscribe failed: $e")));
     }
   }
 
-  // 🌿 ✨ Compact & Aesthetic Receipt Dialog ✨
+  // ------------------------------------------------------------
+  // 🎟️ Receipt Dialog
+  // ------------------------------------------------------------
   Future<void> _showReceiptDialog({
     required String planName,
     required String method,
@@ -196,17 +219,14 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
             constraints: const BoxConstraints(maxWidth: 360),
             child: Dialog(
               backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 🌿 Payment Image
                     Container(
                       width: 90,
                       height: 90,
@@ -216,10 +236,7 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(10),
-                        child: Image.asset(
-                          "assets/images/payment.png",
-                          fit: BoxFit.contain,
-                        ),
+                        child: Image.asset("assets/images/payment.png"),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -236,13 +253,11 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                       "You’re now part of the D.A.R.W.C.O.S. clean movement 🌱",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.black54,
-                        fontSize: 13.5,
-                        height: 1.4,
-                      ),
+                          color: Colors.black54,
+                          fontSize: 13.5,
+                          height: 1.4),
                     ),
                     const SizedBox(height: 18),
-                    // 🧾 Receipt Card
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -250,8 +265,8 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                       decoration: BoxDecoration(
                         color: Colors.grey[50],
                         borderRadius: BorderRadius.circular(14),
-                        border:
-                            Border.all(color: darwcosGreen.withOpacity(0.2)),
+                        border: Border.all(
+                            color: darwcosGreen.withOpacity(0.2)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,10 +292,11 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                           backgroundColor: darwcosGreen,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        icon:
-                            const Icon(Icons.check_rounded, color: Colors.white),
+                        icon: const Icon(Icons.check_rounded,
+                            color: Colors.white),
                         label: const Text(
                           "Got it",
                           style: TextStyle(
@@ -313,12 +329,17 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                   color: Colors.black87)),
           Text(value,
               style: const TextStyle(
-                  fontSize: 14, color: Colors.black87, fontFamily: 'RobotoMono')),
+                  fontSize: 14,
+                  color: Colors.black87,
+                  fontFamily: 'RobotoMono')),
         ],
       ),
     );
   }
 
+  // ------------------------------------------------------------
+  // 🖥️ UI
+  // ------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -327,11 +348,14 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
           title: const Text("Subscription Plans"),
           backgroundColor: Colors.white,
           foregroundColor: darwcosGreen,
-          elevation: 1,
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
+
+    final currentPlanName = _mySubscription?["plan_name"];
+    final endDate =
+        _mySubscription?["end_date"]?.toString().substring(0, 10);
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -340,7 +364,6 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
         backgroundColor: Colors.white,
         foregroundColor: darwcosGreen,
         centerTitle: true,
-        elevation: 2,
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -349,48 +372,96 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
             constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
               children: _plans.map((plan) {
-                final displayName = plan['display_name'] ?? plan['name'];
+                final displayName =
+                    _capitalizeEachWord(plan['display_name'] ?? plan['name']);
                 final price = plan['price']?.toString() ?? '';
                 final duration = plan['duration_days']?.toString() ?? '';
                 final desc = plan['description'] ?? '';
                 final icon = plan['icon'] as IconData?;
 
+                final isActive = currentPlanName != null &&
+                    currentPlanName
+                        .toString()
+                        .toLowerCase()
+                        .contains(displayName
+                            .toString()
+                            .toLowerCase()
+                            .split(' ')
+                            .first);
+
                 return Card(
                   elevation: 3,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  margin:
+                      const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18)),
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
                             CircleAvatar(
                               radius: 28,
-                              backgroundColor: darwcosGreen.withOpacity(0.1),
+                              backgroundColor:
+                                  darwcosGreen.withOpacity(0.1),
                               child: Icon(icon ?? Icons.star,
                                   color: darwcosGreen, size: 28),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    displayName,
-                                    style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: darwcosGreen),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment
+                                            .spaceBetween,
+                                    children: [
+                                      Text(
+                                        displayName,
+                                        style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight:
+                                                FontWeight.bold,
+                                            color: darwcosGreen),
+                                      ),
+                                      if (isActive)
+                                        Container(
+                                          padding:
+                                              const EdgeInsets
+                                                  .symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: darwcosGreen
+                                                .withOpacity(0.1),
+                                            borderRadius:
+                                                BorderRadius
+                                                    .circular(8),
+                                          ),
+                                          child: const Text(
+                                            "ACTIVE",
+                                            style: TextStyle(
+                                                color:
+                                                    darwcosGreen,
+                                                fontWeight:
+                                                    FontWeight.bold,
+                                                fontSize: 12),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                   Text(
                                     "₱$price • $duration days",
                                     style: const TextStyle(
                                         color: Colors.black87,
                                         fontSize: 14,
-                                        fontWeight: FontWeight.w600),
+                                        fontWeight:
+                                            FontWeight.w600),
                                   ),
                                 ],
                               ),
@@ -401,29 +472,44 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
                         Text(
                           desc,
                           style: const TextStyle(
-                              fontSize: 14, color: Colors.black54, height: 1.4),
+                              fontSize: 14,
+                              color: Colors.black54,
+                              height: 1.4),
                         ),
                         const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () =>
-                                _showPaymentDialog(plan['id'], displayName),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: darwcosGreen,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
+                        if (!isActive)
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () => _showPaymentDialog(
+                                  plan['id'], displayName),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: darwcosGreen,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                            12)),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12),
+                              ),
+                              child: const Text(
+                                "Choose this Plan",
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight:
+                                        FontWeight.bold),
+                              ),
                             ),
-                            child: const Text(
-                              "Choose this Plan",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold),
-                            ),
+                          )
+                        else
+                          Text(
+                            "Valid until: $endDate",
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black54,
+                                fontStyle:
+                                    FontStyle.italic),
                           ),
-                        ),
                       ],
                     ),
                   ),
