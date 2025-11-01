@@ -72,34 +72,11 @@ class ApiService {
     return res;
   }
 
-  static Future<List<dynamic>> getAssignedPickups() async {
-    final res = await _withAuthRetry(() async {
-      return await http.get(
-        Uri.parse("$baseUrl/trash_pickups/"),
-        headers: await _authHeaders(),
-      );
-    });
-
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      if (data is List) return data;
-      if (data is Map && data.containsKey('results')) return data['results'];
-      return [];
-    } else {
-      debugPrint("❌ Failed to load assigned pickups: ${res.statusCode}");
-      return [];
-    }
-  }
-
-
-  // ✅ keep this function INSIDE the class, not outside the final brace!
-
-  
 
   // ============================
   // 👤 Auth
   // ============================
-  static Future<bool> loginUser(String username, String password) async {
+    static Future<bool> loginUser(String username, String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/token/'),
       headers: {'Content-Type': 'application/json'},
@@ -108,8 +85,11 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      await _setAccessToken(data['access']);
-      await _setRefreshToken(data['refresh']);
+      final prefs = await SharedPreferences.getInstance();
+
+      // ✅ Store under the same key that all other requests use
+      await prefs.setString('access_token', data['access']);
+      await prefs.setString('refresh_token', data['refresh']);
       debugPrint("✅ Login successful — tokens saved");
       return true;
     } else {
@@ -142,6 +122,7 @@ class ApiService {
   static Future<void> logout() async {
     await _clearTokens();
   }
+
 
   // ============================
   // 👤 REGISTER USER / EMPLOYEE (Updated)
@@ -194,30 +175,64 @@ class ApiService {
     }
   }
 
-  // ============================
-  // 👤 Current User
-  // ============================
-  static Future<Map<String, dynamic>?> getCurrentUser() async {
-    try {
-      final res = await _withAuthRetry(() async {
-        return http.get(
-          Uri.parse('$baseUrl/employees/me/'),
-          headers: await _authHeaders(),
-        );
-      });
+  // ---------------- GET CURRENT USER ----------------
+  static Future<Map<String, dynamic>> getCurrentUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token'); // ✅ must match above
+    final url = Uri.parse("$baseUrl/users/me/");
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        debugPrint("👤 Current user: $data");
-        return data;
-      }
+    final response = await http.get(url, headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    });
 
-      debugPrint("❌ getCurrentUser failed: ${res.statusCode} - ${res.body}");
-    } catch (e) {
-      debugPrint("⚠️ Error fetching user: $e");
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception("Failed to fetch user details (${response.statusCode})");
     }
-    return null;
   }
+
+  // ------------------------------
+  // Update Driver Location (GPS)
+  // ------------------------------
+  static Future<bool> updateDriverLocation(double lat, double lng) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/drivers/update_location/'),
+        headers: await getAuthHeaders(),
+        body: jsonEncode({
+          "latitude": lat,
+          "longitude": lng,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint("✅ Driver location updated: $lat, $lng");
+        return true;
+      } else {
+        debugPrint("❌ Failed to update driver location: ${response.statusCode}");
+        return false;
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error updating driver location: $e");
+      return false;
+    }
+  }
+
+  // ------------------------------
+  // Get Auth Headers (with JWT Token)
+  // ------------------------------
+  static Future<Map<String, String>> getAuthHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+
 
   // ============================
   // 🗑️ Trash Pickups
@@ -694,5 +709,69 @@ class ApiService {
         throw Exception('Failed to load driver profile');
       }
     }
+
+// ============================
+// 🚗 DRIVER PICKUP INTEGRATION
+// ============================
+
+// 🟢 Fetch all available pickups (unassigned)
+static Future<List<dynamic>> getAvailablePickups() async {
+  final response = await http.get(
+    Uri.parse('$baseUrl/trash_pickups/available/'), // ✅ Matches Django route
+    headers: await getAuthHeaders(),
+  );
+
+  debugPrint("📦 [GET] Available pickups → ${response.statusCode}");
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body);
+  } else {
+    debugPrint("❌ Failed to load pickups: ${response.body}");
+    throw Exception('Failed to load available pickups');
+  }
+}
+
+  // 🟢 Accept a pickup (driver claims it)
+  static Future<bool> acceptPickup(int pickupId) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/trash_pickups/$pickupId/accept/'), // ✅ Matches /api/trash_pickups/<id>/accept/
+      headers: await getAuthHeaders(),
+    );
+
+    debugPrint("🚚 [PATCH] Accept pickup #$pickupId → ${response.statusCode}");
+    if (response.statusCode == 200) {
+      debugPrint("✅ Pickup #$pickupId accepted successfully!");
+      return true;
+    } else {
+      debugPrint("❌ Failed to accept pickup: ${response.body}");
+      return false;
+    }
+  }
+
+  // 🟢 Mark pickup as completed (driver)
+  static Future<bool> completePickup(int pickupId) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/trash_pickups/$pickupId/complete/'),
+      headers: await getAuthHeaders(),
+    );
+
+    debugPrint("✅ [PATCH] Complete pickup #$pickupId → ${response.statusCode}");
+    return response.statusCode == 200;
+  }
+
+  // 🟢 Fetch driver’s assigned pickups
+  static Future<List<dynamic>> getAssignedPickups() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/trash_pickups/'),
+      headers: await getAuthHeaders(),
+    );
+
+    debugPrint("🚚 [GET] Assigned pickups → ${response.statusCode}");
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      debugPrint("❌ Failed to load assigned pickups: ${response.body}");
+      throw Exception('Failed to load assigned pickups');
+    }
+  }
   
 }
