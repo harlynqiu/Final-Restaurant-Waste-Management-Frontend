@@ -40,11 +40,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final success = await ApiService.loginUser(username, password);
 
-    // Stop loading safely
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    // If login failed
+    // ❌ If login failed
     if (!success) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -56,26 +55,30 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // ✅ If login succeeded
+    // ✅ Login succeeded
     try {
       final user = await ApiService.getCurrentUser();
       final prefs = await SharedPreferences.getInstance();
       final role = prefs.getString("role") ?? user["role"] ?? "owner";
 
+      // ✅ Show success *before* navigation
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("✅ Login successful as $role!")),
       );
 
-      // Pick dashboard
+      // Short delay to allow snackbar to display properly
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      if (!mounted) return;
+
+      // Choose target screen
       Widget targetScreen = role.toLowerCase() == "driver"
           ? const DriverDashboardScreen()
           : const DashboardScreen();
 
-      // ✅ Replace the current route (prevent back navigation)
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
+      // Replace current route safely
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => targetScreen),
       );
     } catch (e) {
@@ -270,7 +273,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 30),
 
-                // Footer Text
                 const Text(
                   "Radiate Pride. Radiate Cleanliness.",
                   textAlign: TextAlign.center,

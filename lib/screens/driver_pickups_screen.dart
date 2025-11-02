@@ -1,9 +1,9 @@
+// lib/screens/driver_pickups_screen.dart
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'package:intl/intl.dart';
-import 'driver_map_screen.dart';
+import 'pickup_map_screen.dart'; // ✅ Updated: use the pickup map
 import 'package:shared_preferences/shared_preferences.dart';
-
 
 class DriverPickupsScreen extends StatefulWidget {
   const DriverPickupsScreen({super.key});
@@ -22,12 +22,12 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPickups(); // ✅ this will call getAssignedPickups()
+    _loadPickups();
   }
 
   Future<void> _loadPickups() async {
     final prefs = await SharedPreferences.getInstance();
-    debugPrint("🔑 Access token: ${prefs.getString('access_token')}"); // 👈 check token first
+    debugPrint("🔑 Access token: ${prefs.getString('access_token')}");
 
     try {
       final data = await ApiService.getAssignedPickups();
@@ -45,7 +45,6 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
 
   Future<void> _refresh() async => _loadPickups();
 
-  // Status color helper
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
       case "ASSIGNED":
@@ -137,6 +136,25 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                         ],
                       ),
                       isThreeLine: true,
+                      trailing: const Icon(Icons.map, color: darwcosGreen),
+                      onTap: () {
+                        // ✅ Navigate to PickupMapScreen with coordinates
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PickupMapScreen(
+                              pickupId: pickup['id'],
+                              address: pickup['pickup_address'] ?? 'No address',
+                              latitude: pickup['latitude'] != null
+                                  ? double.tryParse(pickup['latitude'].toString())
+                                  : null,
+                              longitude: pickup['longitude'] != null
+                                  ? double.tryParse(pickup['longitude'].toString())
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },

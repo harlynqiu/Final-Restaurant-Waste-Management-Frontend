@@ -224,38 +224,6 @@ static Future<bool> register({
 
 
   // ------------------------------
-  // 🚗 Update Driver Location (GPS)
-  // ------------------------------
-  static Future<bool> updateDriverLocation(double lat, double lng) async {
-    try {
-      final url = Uri.parse('$baseUrl/drivers/update_location/');
-      final headers = await getAuthHeaders();
-      final body = jsonEncode({
-        "latitude": lat,
-        "longitude": lng,
-      });
-
-      final response = await http.patch(url, headers: headers, body: body);
-
-      if (response.statusCode == 200) {
-        debugPrint("✅ [PATCH] Driver location updated → $lat, $lng");
-        return true;
-      } else if (response.statusCode == 404) {
-        debugPrint("❌ [404] Driver not found or route missing → ${response.body}");
-      } else if (response.statusCode == 400) {
-        debugPrint("⚠️ [400] Missing coordinates or bad request → ${response.body}");
-      } else {
-        debugPrint("❌ [${response.statusCode}] Unknown error → ${response.body}");
-      }
-
-      return false;
-    } catch (e) {
-      debugPrint("🔥 Exception while updating driver location: $e");
-      return false;
-    }
-  }
-
-  // ------------------------------
   // Get Auth Headers (with JWT Token)
   // ------------------------------
   static Future<Map<String, String>> getAuthHeaders() async {
@@ -266,8 +234,6 @@ static Future<bool> register({
       'Authorization': 'Bearer $token',
     };
   }
-
-
 
   // ============================
   // 🗑️ Trash Pickups
@@ -830,6 +796,55 @@ static Future<List<dynamic>> getAvailablePickups() async {
       return null;
     }
   }
+
+  // ============================
+  // 🚗 UPDATE DRIVER LOCATION
+  // ============================
+  static Future<bool> updateDriverLocation(double latitude, double longitude) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(_kAccess);
+
+    if (token == null) {
+      if (kDebugMode) print("❌ No token found. User not logged in.");
+      return false;
+    }
+
+    final url = Uri.parse("$baseUrl/drivers/update_location/");
+    if (kDebugMode) print("📡 [PATCH] Update driver location → $url");
+
+    final response = await http.patch(
+      url,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode({
+        "latitude": latitude,
+        "longitude": longitude,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      if (kDebugMode) print("✅ Location updated successfully → ${response.body}");
+      return true;
+    } else if (response.statusCode == 404) {
+      if (kDebugMode) print("❌ [404] Driver not found → ${response.body}");
+      return false;
+    } else if (response.statusCode == 401) {
+      if (kDebugMode) print("❌ [401] Unauthorized → ${response.body}");
+      return false;
+    } else {
+      if (kDebugMode) print("⚠️ Unexpected error → ${response.statusCode}: ${response.body}");
+      return false;
+    }
+  } catch (e) {
+    if (kDebugMode) print("❌ Exception updating location: $e");
+    return false;
+  }
+}
+
+
 
   
 }
