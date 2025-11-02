@@ -844,7 +844,4 @@ static Future<List<dynamic>> getAvailablePickups() async {
   }
 }
 
-
-
-  
 }
