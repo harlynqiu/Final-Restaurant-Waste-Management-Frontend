@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'package:intl/intl.dart';
-
+import 'driver_map_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 class DriverPickupsScreen extends StatefulWidget {
@@ -25,8 +26,11 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
   }
 
   Future<void> _loadPickups() async {
+    final prefs = await SharedPreferences.getInstance();
+    debugPrint("🔑 Access token: ${prefs.getString('access_token')}"); // 👈 check token first
+
     try {
-      final data = await ApiService.getAssignedPickups(); // ✅ function is now used here
+      final data = await ApiService.getAssignedPickups();
       setState(() {
         _pickups = data;
         _loading = false;

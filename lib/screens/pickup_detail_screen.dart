@@ -46,10 +46,7 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              "No",
-              style: TextStyle(color: Colors.grey),
-            ),
+            child: const Text("No", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
@@ -77,33 +74,28 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
 
     setState(() => _isLoading = true);
 
-    final updatedPickup =
-        await ApiService.updateTrashPickup(id, {"status": "CANCELLED"});
+    // ✅ Use the new cancelPickup() function
+    final ok = await ApiService.cancelPickup(id);
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (updatedPickup == null) {
+    if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Failed to cancel pickup. Please try again."),
+          content: Text("❌ Failed to cancel pickup. Please try again."),
           backgroundColor: Colors.redAccent,
         ),
       );
       return;
     }
 
-    final result = {
-      ...widget.pickup,
-      "status": "CANCELLED",
-      "id": (updatedPickup as Map<String, dynamic>?)?["id"] ?? id,
-    };
-
-    Navigator.pop(context, {"refresh": true, "pickup": result});
+    // ✅ Refresh the parent screen
+    Navigator.pop(context, {"refresh": true});
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("Pickup cancelled successfully."),
+        content: Text("✅ Pickup cancelled successfully."),
         backgroundColor: darwcosGreen,
       ),
     );
@@ -140,8 +132,6 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
     final scheduled = _formatDate(p['scheduled_date'] ?? p['created_at']);
     final address =
         p['pickup_address'] ?? p['restaurant_name'] ?? "No address provided";
-
-    // 🟢 Get donation drive title if available
     final donationDrive =
         p['donation_drive_title'] ?? p['donation_drive'] ?? "No donation drive linked";
 
@@ -182,8 +172,7 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
           ? const Center(child: CircularProgressIndicator(color: darwcosGreen))
           : Center(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Card(
@@ -194,8 +183,8 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                     elevation: 5,
                     shadowColor: darwcosGreen.withOpacity(0.1),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 26),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -237,9 +226,7 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                           Text(
                             address,
                             style: const TextStyle(
-                                fontSize: 16,
-                                height: 1.4,
-                                color: Colors.black87),
+                                fontSize: 16, height: 1.4, color: Colors.black87),
                           ),
                           const Divider(height: 32),
 
@@ -284,8 +271,9 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                               style: const TextStyle(
                                   fontSize: 16, color: Colors.black87)),
 
-                          // ---------------- DONATION DRIVE ----------------
                           const Divider(height: 32),
+
+                          // ---------------- DONATION DRIVE ----------------
                           Text(
                             "Donation Drive:",
                             style: TextStyle(
@@ -306,10 +294,7 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                             Center(
                               child: ElevatedButton.icon(
                                 onPressed: _cancelPickup,
-                                icon: const Icon(
-                                  Icons.cancel,
-                                  color: Colors.white,
-                                ),
+                                icon: const Icon(Icons.cancel, color: Colors.white),
                                 label: const Text(
                                   "Cancel Pickup",
                                   style: TextStyle(

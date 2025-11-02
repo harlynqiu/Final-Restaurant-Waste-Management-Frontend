@@ -43,9 +43,9 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
   }
 
   // ------------------------------
-  // 🚗 Accept pickup
+  // 🚗 Accept pickup and redirect to map
   // ------------------------------
-  Future<void> _acceptPickup(int pickupId) async {
+  Future<void> _acceptPickup(int pickupId, String address) async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Processing pickup acceptance...")),
@@ -57,7 +57,16 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("✅ Pickup accepted successfully!")),
         );
-        _loadAvailablePickups();
+
+        // ✅ Redirect to map screen with pickup details
+        Navigator.pushReplacementNamed(
+          context,
+          '/pickup-map',
+          arguments: {
+            'pickupId': pickupId,
+            'address': address,
+          },
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("❌ Failed to accept pickup. Try again.")),
@@ -119,6 +128,11 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                     ? DateFormat('yyyy-MM-dd – hh:mm a')
                         .format(DateTime.parse(date))
                     : 'No Date Provided';
+                final restaurantName =
+                    pickup['restaurant_name'] ?? 'Unknown Restaurant';
+                final address = pickup['pickup_address'] ?? 'No Address';
+                final wasteType = pickup['waste_type'] ?? 'N/A';
+                final weight = pickup['weight_kg'] ?? '0';
 
                 return Card(
                   elevation: 4,
@@ -138,7 +152,7 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                pickup['restaurant_name'] ?? 'Unknown Restaurant',
+                                restaurantName,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -148,9 +162,9 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                           ],
                         ),
                         const SizedBox(height: 6),
-                        Text("📍 ${pickup['pickup_address'] ?? 'No Address'}"),
-                        Text("🗑️ Waste Type: ${pickup['waste_type'] ?? 'N/A'}"),
-                        Text("⚖️ Weight: ${pickup['weight_kg'] ?? '0'} kg"),
+                        Text("📍 $address"),
+                        Text("🗑️ Waste Type: $wasteType"),
+                        Text("⚖️ Weight: ${weight}kg"),
                         Text("🗓 Scheduled: $formattedDate"),
                         const SizedBox(height: 8),
                         Align(
@@ -166,7 +180,8 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            onPressed: () => _acceptPickup(pickup['id']),
+                            onPressed: () =>
+                                _acceptPickup(pickup['id'], address),
                           ),
                         ),
                       ],

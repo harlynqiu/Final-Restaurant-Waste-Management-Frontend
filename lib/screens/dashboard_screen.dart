@@ -42,10 +42,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _fetchUserInfo() async {
     final user = await ApiService.getCurrentUser();
+    final employee = await ApiService.getMyEmployeeProfile();
     if (!mounted) return;
     setState(() {
       _username = user?["username"] ?? "";
-      _restaurantName = user?["restaurant_name"] ?? "Restaurant";
+      _restaurantName = employee?["restaurant_name"] ?? "Restaurant";
     });
   }
 

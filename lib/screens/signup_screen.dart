@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -22,21 +23,20 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _addressController = TextEditingController();
 
   bool _isLoading = false;
-  bool _obscurePassword = true;
   LatLng? _selectedLocation;
   final MapController _mapController = MapController();
-  List<dynamic> _searchResults = [];
+  StreamSubscription<Position>? _positionSub;
 
   static const Color darwcosGreen = Color(0xFF015704);
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _initLocationOnce();
   }
 
-  // 📍 Get current location
-  Future<void> _getCurrentLocation() async {
+  /// Initialize location safely only once
+  Future<void> _initLocationOnce() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -46,41 +46,42 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
 
-      LocationPermission permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Location permission denied.")),
+          const SnackBar(content: Text("Location permission permanently denied.")),
         );
         return;
       }
 
-      Position pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      setState(() {
-        _selectedLocation = LatLng(pos.latitude, pos.longitude);
-      });
+      // ✅ Use getCurrentPosition only once (no active stream)
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
 
+      if (!mounted) return;
+      setState(() => _selectedLocation = LatLng(pos.latitude, pos.longitude));
       await _updateAddressFromLatLng(pos.latitude, pos.longitude);
     } catch (e) {
-      debugPrint("Location error: $e");
+      debugPrint("Location init error: $e");
     }
   }
 
-  // 🌍 Reverse-geocode coordinates → address
+  /// Reverse-geocode coordinates → address
   Future<void> _updateAddressFromLatLng(double lat, double lng) async {
     try {
-      final url =
-          "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng";
+      final url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng";
       final response = await http.get(Uri.parse(url), headers: {
         "User-Agent": "DARWCOSApp/1.0 (support@darwcos.com)"
       });
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final displayName = data["display_name"] ?? "Unknown location";
         setState(() {
-          _addressController.text = displayName;
+          _addressController.text = data["display_name"] ?? "Unknown location";
         });
       }
     } catch (e) {
@@ -88,30 +89,13 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  // 🔍 Search address
-  Future<void> _searchAddress(String query) async {
-    if (query.isEmpty) return;
-    try {
-      final url =
-          "https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&limit=5";
-      final response = await http.get(Uri.parse(url), headers: {
-        "User-Agent": "DARWCOSApp/1.0 (support@darwcos.com)"
-      });
-      if (response.statusCode == 200) {
-        setState(() {
-          _searchResults = jsonDecode(response.body);
-        });
-      }
-    } catch (e) {
-      debugPrint("Search error: $e");
-    }
-  }
-
-  // 🗺️ Map picker modal
+  /// Map picker modal
   Future<void> _openMapPicker() async {
     if (_selectedLocation == null) {
-      await _getCurrentLocation();
+      await _initLocationOnce();
     }
+
+    LatLng tempLocation = _selectedLocation ?? LatLng(7.0731, 125.6128); // Default: Davao City
 
     await showModalBottomSheet(
       context: context,
@@ -121,9 +105,7 @@ class _SignupScreenState extends State<SignupScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) {
-        LatLng tempLocation = _selectedLocation!;
-        TextEditingController searchCtrl =
-            TextEditingController(text: _addressController.text);
+        TextEditingController searchCtrl = TextEditingController(text: _addressController.text);
 
         return StatefulBuilder(
           builder: (context, setModalState) => SafeArea(
@@ -151,8 +133,17 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     onSubmitted: (query) async {
-                      await _searchAddress(query);
-                      setModalState(() {});
+                      if (query.trim().isEmpty) return;
+                      final results = await _searchAddress(query.trim());
+                      if (results.isNotEmpty) {
+                        final first = results.first;
+                        tempLocation = LatLng(
+                          double.parse(first['lat']),
+                          double.parse(first['lon']),
+                        );
+                        _mapController.move(tempLocation, 16);
+                        setModalState(() {});
+                      }
                     },
                   ),
                 ),
@@ -172,8 +163,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate:
-                            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                        urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                       ),
                       MarkerLayer(
                         markers: [
@@ -193,10 +183,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     ],
                   ),
                 ),
-
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.check_circle_outline),
                     style: ElevatedButton.styleFrom(
@@ -208,13 +196,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     onPressed: () {
                       Navigator.pop(context);
-                      setState(() {
-                        _selectedLocation = tempLocation;
-                      });
-                      _updateAddressFromLatLng(
-                        tempLocation.latitude,
-                        tempLocation.longitude,
-                      );
+                      setState(() => _selectedLocation = tempLocation);
+                      _updateAddressFromLatLng(tempLocation.latitude, tempLocation.longitude);
                     },
                     label: const Text(
                       "Confirm Location",
@@ -230,52 +213,77 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  // 🧾 Register user (fixed call)
+  /// Search address via OpenStreetMap
+  Future<List<dynamic>> _searchAddress(String query) async {
+    try {
+      final url = "https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=5";
+      final response = await http.get(Uri.parse(url), headers: {
+        "User-Agent": "DARWCOSApp/1.0 (support@darwcos.com)"
+      });
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      debugPrint("Search error: $e");
+    }
+    return [];
+  }
+
+  /// Register user
   Future<void> _register() async {
     if (_restaurantController.text.trim().isEmpty ||
         _addressController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Please enter restaurant name and confirm address.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter restaurant name and confirm address.")),
+      );
       return;
     }
 
     if (_selectedLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Please set your restaurant location.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please set your restaurant location.")),
+      );
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // ✅ Corrected: Use named parameters
-    bool success = await ApiService.register(
-      username: _usernameController.text.trim(),
-      password: _passwordController.text.trim(),
-      email: _emailController.text.trim(),
-      name: _usernameController.text.trim(),
-      position: "Owner",
-      restaurantName: _restaurantController.text.trim(),
-      address: _addressController.text.trim(),
-    );
-
-    setState(() => _isLoading = false);
+  final success = await ApiService.register(
+    username: _usernameController.text.trim(),
+    password: _passwordController.text.trim(),
+    email: _emailController.text.trim(),
+    name: _usernameController.text.trim(),
+    position: "Owner",
+    restaurantName: _restaurantController.text.trim(),
+    address: _addressController.text.trim(),
+    latitude: _selectedLocation!.latitude,
+    longitude: _selectedLocation!.longitude,
+  );
 
     if (!mounted) return;
+    setState(() => _isLoading = false);
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Registration successful! Please login.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Registration successful! Please login.")),
+      );
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Registration failed.")));
+        const SnackBar(content: Text("Registration failed.")),
+      );
     }
   }
 
-  // ---------------- UI ----------------
+  @override
+  void dispose() {
+    _positionSub?.cancel(); // ✅ clean up (even though not actively used now)
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -286,19 +294,13 @@ class _SignupScreenState extends State<SignupScreen> {
             padding: const EdgeInsets.all(16),
             child: Card(
               elevation: 6,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset(
-                      "assets/images/black_philippine_eagle.png",
-                      width: 100,
-                    ),
+                    Image.asset("assets/images/black_philippine_eagle.png", width: 100),
                     const SizedBox(height: 10),
                     const Text(
                       "Register Your Restaurant",
@@ -310,18 +312,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    _buildTextField("Full Name / Username",
-                        _usernameController, Icons.person),
+                    _buildTextField("Full Name / Username", _usernameController, Icons.person),
                     const SizedBox(height: 16),
-                    _buildTextField(
-                        "Email (optional)", _emailController, Icons.email),
+                    _buildTextField("Email (optional)", _emailController, Icons.email),
                     const SizedBox(height: 16),
-                    _buildTextField(
-                        "Password", _passwordController, Icons.lock,
-                        obscure: true),
+                    _buildTextField("Password", _passwordController, Icons.lock, obscure: true),
                     const SizedBox(height: 16),
-                    _buildTextField("Restaurant Name", _restaurantController,
-                        Icons.store),
+                    _buildTextField("Restaurant Name", _restaurantController, Icons.store),
                     const SizedBox(height: 16),
 
                     TextField(
@@ -329,11 +326,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       readOnly: true,
                       decoration: InputDecoration(
                         labelText: "Restaurant Address",
-                        prefixIcon: const Icon(Icons.location_on_outlined,
-                            color: darwcosGreen),
+                        prefixIcon: const Icon(Icons.location_on_outlined, color: darwcosGreen),
                         suffixIcon: IconButton(
-                          icon: const Icon(Icons.push_pin,
-                              color: darwcosGreen, size: 26),
+                          icon: const Icon(Icons.push_pin, color: darwcosGreen, size: 26),
                           onPressed: _openMapPicker,
                         ),
                         border: const OutlineInputBorder(),
@@ -348,41 +343,30 @@ class _SignupScreenState extends State<SignupScreen> {
                           : ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: darwcosGreen,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
                               onPressed: _register,
                               child: const Text(
                                 "Sign Up",
-                                style: TextStyle(
-                                    fontSize: 16, color: Colors.white),
+                                style: TextStyle(fontSize: 16, color: Colors.white),
                               ),
                             ),
                     ),
                     const SizedBox(height: 16),
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text("Already have an account? "),
                         TextButton(
-                          onPressed: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const LoginScreen()),
-                            );
-                          },
-                          style: TextButton.styleFrom(
-                              foregroundColor: darwcosGreen),
+                          onPressed: () => Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          ),
+                          style: TextButton.styleFrom(foregroundColor: darwcosGreen),
                           child: const Text(
                             "Sign in",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: darwcosGreen),
+                            style: TextStyle(fontWeight: FontWeight.bold, color: darwcosGreen),
                           ),
                         ),
                       ],
@@ -397,8 +381,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller,
-      IconData icon,
+  Widget _buildTextField(String label, TextEditingController controller, IconData icon,
       {bool obscure = false}) {
     return TextField(
       controller: controller,

@@ -27,42 +27,59 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter both username and password.")),
       );
       return;
     }
 
+    // Start loading
+    if (!mounted) return;
     setState(() => _isLoading = true);
+
     final success = await ApiService.loginUser(username, password);
+
+    // Stop loading safely
+    if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (!mounted) return;
-
+    // If login failed
     if (!success) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Invalid username or password.")),
+        const SnackBar(
+          content: Text("Invalid username or password."),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
+    // ✅ If login succeeded
     try {
       final user = await ApiService.getCurrentUser();
       final prefs = await SharedPreferences.getInstance();
-      final role = prefs.getString("role") ?? user?["role"] ?? "owner";
+      final role = prefs.getString("role") ?? user["role"] ?? "owner";
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("✅ Login successful as $role!")),
       );
 
-      Widget targetScreen =
-          role.toLowerCase() == "driver" ? const DriverDashboardScreen() : const DashboardScreen();
+      // Pick dashboard
+      Widget targetScreen = role.toLowerCase() == "driver"
+          ? const DriverDashboardScreen()
+          : const DashboardScreen();
 
+      // ✅ Replace the current route (prevent back navigation)
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => targetScreen),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("⚠️ Error fetching user info: $e")),
       );

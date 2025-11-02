@@ -27,9 +27,10 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   String? _selectedWasteType;
   int? _selectedDonationDriveId;
 
-  static const Color darwcosGreen = Color.fromARGB(255, 1, 87, 4);
+  static const Color darwcosGreen = Color(0xFF015704);
 
   List<dynamic> _donationDrives = [];
+  Map<String, dynamic>? _employee;
 
   final Map<String, String> _wasteTypes = {
     "customer": "Customer Food Waste",
@@ -41,28 +42,38 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   void initState() {
     super.initState();
     _addressController =
-        TextEditingController(text: widget.pickup?['address'] ?? "");
+        TextEditingController(text: widget.pickup?['pickup_address'] ?? "");
     _weightController = TextEditingController(
-        text: widget.pickup?['trash_weight']?.toString() ?? "");
+        text: widget.pickup?['weight_kg']?.toString() ?? "");
     _selectedWasteType = widget.pickup?['waste_type'];
     _fetchPoints();
-    _fetchUserAddress();
+    _fetchUserProfile();
     _fetchDonationDrives();
   }
 
   // ---------------- FETCH USER ADDRESS ----------------
-  Future<void> _fetchUserAddress() async {
+  Future<void> _fetchUserProfile() async {
     if (widget.pickup != null) return;
     try {
-      final user = await ApiService.getCurrentUser();
-      if (user != null) {
+      final employee = await ApiService.getMyEmployeeProfile();
+      if (employee != null) {
         setState(() {
-          _addressController.text =
-              user['restaurant_name'] ?? 'Restaurant Address';
+          _employee = employee;
+          _addressController.text = employee['address'] ??
+              employee['pickup_address'] ??
+              employee['restaurant_name'] ??
+              'No Address Found';
+        });
+      } else {
+        setState(() {
+          _addressController.text = 'No Address Found';
         });
       }
     } catch (e) {
-      debugPrint("❌ Failed to fetch user address: $e");
+      debugPrint("❌ Failed to fetch user profile: $e");
+      setState(() {
+        _addressController.text = 'No Address Found';
+      });
     }
   }
 
@@ -74,27 +85,27 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   }
 
   // ---------------- FETCH DONATION DRIVES ----------------
-Future<void> _fetchDonationDrives() async {
-  try {
-    final drives = await ApiService.getDonationDrives();
-    debugPrint("✅ Donation drives response: $drives");
-    setState(() {
-      _donationDrives = drives.map((d) {
-        return {
-          "id": int.tryParse(d["id"].toString()) ?? 0,
-          "title": d["title"] ?? d["name"] ?? "Untitled Drive",
-        };
-      }).toList();
-      _loadingDrives = false;
-    });
-  } catch (e) {
-    debugPrint("⚠️ Failed to load donation drives: $e");
-    setState(() {
-      _donationDrives = [];
-      _loadingDrives = false;
-    });
+  Future<void> _fetchDonationDrives() async {
+    try {
+      final drives = await ApiService.getDonationDrives();
+      debugPrint("✅ Donation drives response: $drives");
+      setState(() {
+        _donationDrives = drives.map((d) {
+          return {
+            "id": int.tryParse(d["id"].toString()) ?? 0,
+            "title": d["title"] ?? d["name"] ?? "Untitled Drive",
+          };
+        }).toList();
+        _loadingDrives = false;
+      });
+    } catch (e) {
+      debugPrint("⚠️ Failed to load donation drives: $e");
+      setState(() {
+        _donationDrives = [];
+        _loadingDrives = false;
+      });
+    }
   }
-}
 
   // ---------------- DATE/TIME PICKERS ----------------
   Future<void> _pickDate() async {
@@ -122,26 +133,18 @@ Future<void> _fetchDonationDrives() async {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text("Confirm Pickup Now"),
-            content: const Text(
-                "Would you like to schedule this pickup for right now?"),
+            content:
+                const Text("Would you like to schedule this pickup for right now?"),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text(
-                  "Cancel",
-                  style: TextStyle(
-                      color: Colors.black, fontWeight: FontWeight.bold),
-                ),
+                child: const Text("Cancel"),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: darwcosGreen),
-                child: const Text(
-                  "Yes, Proceed",
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: darwcosGreen),
+                child: const Text("Yes, Proceed",
+                    style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -160,7 +163,6 @@ Future<void> _fetchDonationDrives() async {
     }
 
     DateTime scheduledDate;
-
     if (_pickupOption == "schedule") {
       if (_selectedDate == null || _selectedTime == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -169,7 +171,6 @@ Future<void> _fetchDonationDrives() async {
         );
         return;
       }
-
       scheduledDate = DateTime(
         _selectedDate!.year,
         _selectedDate!.month,
@@ -189,7 +190,7 @@ Future<void> _fetchDonationDrives() async {
       "scheduled_date": scheduledDate.toIso8601String(),
       "weight_kg": double.parse(_weightController.text),
       "pickup_address": _addressController.text,
-      "restaurant_name": _addressController.text,
+      "restaurant_name": _employee?['restaurant_name'] ?? 'Unknown Restaurant',
       "waste_type": _selectedWasteType,
       "donation_drive": _selectedDonationDriveId,
     };
@@ -232,9 +233,8 @@ Future<void> _fetchDonationDrives() async {
     }) {
       return InputDecoration(
         labelText: label,
-        prefixIcon: icon != null
-            ? Icon(icon, color: darwcosGreen.withOpacity(0.7))
-            : null,
+        prefixIcon:
+            icon != null ? Icon(icon, color: darwcosGreen.withOpacity(0.7)) : null,
         filled: true,
         fillColor: Colors.grey[100],
         border: OutlineInputBorder(
@@ -266,8 +266,8 @@ Future<void> _fetchDonationDrives() async {
           children: [
             Card(
               elevation: 3,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               color: Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -287,8 +287,8 @@ Future<void> _fetchDonationDrives() async {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _weightController,
-                        decoration: _fieldDecoration(
-                            label: "Weight (kg)", icon: Icons.scale),
+                        decoration:
+                            _fieldDecoration(label: "Weight (kg)", icon: Icons.scale),
                         keyboardType: TextInputType.number,
                         validator: (v) =>
                             v == null || v.isEmpty ? "Enter weight" : null,
@@ -310,7 +310,6 @@ Future<void> _fetchDonationDrives() async {
                       ),
                       const SizedBox(height: 16),
 
-                      // 🟢 Donation Drive Dropdown
                       _loadingDrives
                           ? const Center(
                               child:
@@ -333,90 +332,25 @@ Future<void> _fetchDonationDrives() async {
                                   : null,
                             ),
                       const SizedBox(height: 24),
-
-                      const Text(
-                        "Pickup Option",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: darwcosGreen,
-                        ),
-                      ),
-                      RadioListTile<String>(
-                        title: const Text("Pick up now"),
-                        value: "now",
-                        activeColor: darwcosGreen,
-                        groupValue: _pickupOption,
-                        onChanged: (v) =>
-                            setState(() => _pickupOption = v!),
-                      ),
-                      RadioListTile<String>(
-                        title: const Text("Schedule a time"),
-                        value: "schedule",
-                        activeColor: darwcosGreen,
-                        groupValue: _pickupOption,
-                        onChanged: (v) =>
-                            setState(() => _pickupOption = v!),
-                      ),
-
-                      if (_pickupOption == "schedule") ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Text(
-                              _selectedDate == null
-                                  ? "No date selected"
-                                  : "Date: ${DateFormat('yyyy-MM-dd').format(_selectedDate!)}",
-                            ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: _pickDate,
-                              child: const Text("Pick Date",
-                                  style: TextStyle(color: darwcosGreen)),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            Text(
-                              _selectedTime == null
-                                  ? "No time selected"
-                                  : "Time: ${_selectedTime!.format(context)}",
-                            ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: _pickTime,
-                              child: const Text("Pick Time",
-                                  style: TextStyle(color: darwcosGreen)),
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      const SizedBox(height: 24),
                       _isLoading
                           ? const Center(
-                              child: CircularProgressIndicator(
-                                  color: darwcosGreen),
-                            )
+                              child:
+                                  CircularProgressIndicator(color: darwcosGreen))
                           : SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: darwcosGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 16),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                icon:
-                                    const Icon(Icons.save, color: Colors.white),
-                                label: Text(
-                                  widget.pickup == null
-                                      ? "Confirm Pickup"
-                                      : "Save Changes",
-                                  style: const TextStyle(
+                                icon: const Icon(Icons.save, color: Colors.white),
+                                label: const Text(
+                                  "Confirm Pickup",
+                                  style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -429,8 +363,6 @@ Future<void> _fetchDonationDrives() async {
                 ),
               ),
             ),
-            const SizedBox(height: 40),
-            Image.asset("assets/images/black_philippine_eagle.png", height: 40),
           ],
         ),
       ),

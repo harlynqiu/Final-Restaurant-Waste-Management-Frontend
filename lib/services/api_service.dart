@@ -127,53 +127,57 @@ class ApiService {
   // ============================
   // 👤 REGISTER USER / EMPLOYEE (Updated)
   // ============================
-  static Future<bool> register({
-    required String username,
-    required String password,
-    required String email,
-    required String name,
-    required String position,
-    String? restaurantName,
-    String? address,
-  }) async {
-    final url = Uri.parse("$baseUrl/employees/register/");
+static Future<bool> register({
+  required String username,
+  required String password,
+  required String email,
+  required String name,
+  required String position,
+  String? restaurantName,
+  String? address,
+  double? latitude,
+  double? longitude,
+}) async {
+  final url = Uri.parse("$baseUrl/employees/register/");
 
-    final body = jsonEncode({
-      "username": username.trim(),
-      "password": password.trim(),
-      "email": email.trim(),
-      "name": name.trim(),
-      "position": position.trim(),
-      "restaurant_name": restaurantName?.trim() ?? "",
-      "address": address?.trim() ?? "",
-    });
+  final body = jsonEncode({
+    "username": username.trim(),
+    "password": password.trim(),
+    "email": email.trim(),
+    "name": name.trim(),
+    "position": position.trim(),
+    "restaurant_name": restaurantName?.trim() ?? "",
+    "address": address?.trim() ?? "",
+    "latitude": latitude,      // ✅ added
+    "longitude": longitude,    // ✅ added
+  });
 
-    try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: body,
-      );
+  try {
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: body,
+    );
 
-      if (response.statusCode == 201) {
-        debugPrint("✅ Registration successful → ${response.body}");
-        return true;
-      } else if (response.statusCode == 400) {
-        final data = jsonDecode(response.body);
-        debugPrint("⚠️ Validation error: $data");
-        return false;
-      } else if (response.statusCode == 405) {
-        debugPrint("🚫 Method Not Allowed — check your Django routes for /api/employees/register/");
-        return false;
-      } else {
-        debugPrint("❌ Registration failed (${response.statusCode}): ${response.body}");
-        return false;
-      }
-    } catch (e) {
-      debugPrint("🔥 Registration error: $e");
+    if (response.statusCode == 201) {
+      debugPrint("✅ Registration successful → ${response.body}");
+      return true;
+    } else if (response.statusCode == 400) {
+      final data = jsonDecode(response.body);
+      debugPrint("⚠️ Validation error: $data");
+      return false;
+    } else if (response.statusCode == 405) {
+      debugPrint("🚫 Method Not Allowed — check your Django route /api/employees/register/");
+      return false;
+    } else {
+      debugPrint("❌ Registration failed (${response.statusCode}): ${response.body}");
       return false;
     }
+  } catch (e) {
+    debugPrint("🔥 Registration error: $e");
+    return false;
   }
+}
 
   // ---------------- GET CURRENT USER ----------------
   static Future<Map<String, dynamic>> getCurrentUser() async {
@@ -193,29 +197,60 @@ class ApiService {
     }
   }
 
-  // ------------------------------
-  // Update Driver Location (GPS)
-  // ------------------------------
-  static Future<bool> updateDriverLocation(double lat, double lng) async {
+  // 🛑 Cancel a pickup
+  static Future<bool> cancelPickup(int pickupId) async {
     try {
-      final response = await http.patch(
-        Uri.parse('$baseUrl/drivers/update_location/'),
-        headers: await getAuthHeaders(),
-        body: jsonEncode({
-          "latitude": lat,
-          "longitude": lng,
-        }),
-      );
+      final res = await _withAuthRetry(() async {
+        return http.patch(
+          Uri.parse("$baseUrl/trash_pickups/$pickupId/cancel/"),
+          headers: await _authHeaders(),
+        );
+      });
 
-      if (response.statusCode == 200) {
-        debugPrint("✅ Driver location updated: $lat, $lng");
+      debugPrint("🛑 [PATCH] Cancel pickup #$pickupId → ${res.statusCode}");
+
+      if (res.statusCode == 200) {
+        debugPrint("✅ Pickup #$pickupId cancelled successfully!");
         return true;
       } else {
-        debugPrint("❌ Failed to update driver location: ${response.statusCode}");
+        debugPrint("❌ Failed to cancel pickup: ${res.statusCode} → ${res.body}");
         return false;
       }
     } catch (e) {
-      debugPrint("⚠️ Error updating driver location: $e");
+      debugPrint("⚠️ Cancel pickup exception: $e");
+      return false;
+    }
+  }
+
+
+  // ------------------------------
+  // 🚗 Update Driver Location (GPS)
+  // ------------------------------
+  static Future<bool> updateDriverLocation(double lat, double lng) async {
+    try {
+      final url = Uri.parse('$baseUrl/drivers/update_location/');
+      final headers = await getAuthHeaders();
+      final body = jsonEncode({
+        "latitude": lat,
+        "longitude": lng,
+      });
+
+      final response = await http.patch(url, headers: headers, body: body);
+
+      if (response.statusCode == 200) {
+        debugPrint("✅ [PATCH] Driver location updated → $lat, $lng");
+        return true;
+      } else if (response.statusCode == 404) {
+        debugPrint("❌ [404] Driver not found or route missing → ${response.body}");
+      } else if (response.statusCode == 400) {
+        debugPrint("⚠️ [400] Missing coordinates or bad request → ${response.body}");
+      } else {
+        debugPrint("❌ [${response.statusCode}] Unknown error → ${response.body}");
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint("🔥 Exception while updating driver location: $e");
       return false;
     }
   }
@@ -773,5 +808,28 @@ static Future<List<dynamic>> getAvailablePickups() async {
       throw Exception('Failed to load assigned pickups');
     }
   }
+
+  // ✅ Fixed: Uses proper token and refresh retry
+  static Future<Map<String, dynamic>?> getMyEmployeeProfile() async {
+    final res = await _withAuthRetry(() async {
+      return http.get(
+        Uri.parse('$baseUrl/employees/me/'),
+        headers: await getAuthHeaders(),
+      );
+    });
+
+    debugPrint("👤 [GET] /employees/me → ${res.statusCode} ${res.body}");
+
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body);
+    } else if (res.statusCode == 401) {
+      debugPrint("⚠️ Unauthorized — token missing or invalid");
+      return null;
+    } else {
+      debugPrint("⚠️ Failed to fetch employee profile: ${res.statusCode} ${res.body}");
+      return null;
+    }
+  }
+
   
 }
