@@ -61,6 +61,7 @@ flutter:
      - assets/images/pickup.png
      - assets/images/davao_thermo_corp.png
      - assets/images/add_employee.png
+     - assets/images/rewards.png
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
