@@ -152,77 +152,89 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
         false;
   }
 
-  // ---------------- SUBMIT PICKUP ----------------
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedDonationDriveId == null) {
+// ---------------- SUBMIT PICKUP ----------------
+Future<void> _submit() async {
+  if (!_formKey.currentState!.validate()) return;
+  if (_selectedDonationDriveId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Please select a donation drive.")),
+    );
+    return;
+  }
+
+  DateTime scheduledDate;
+  if (_pickupOption == "schedule") {
+    if (_selectedDate == null || _selectedTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a donation drive.")),
+        const SnackBar(
+            content: Text("Please select both date and time for your pickup.")),
       );
       return;
     }
-
-    DateTime scheduledDate;
-    if (_pickupOption == "schedule") {
-      if (_selectedDate == null || _selectedTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Please select both date and time for your pickup.")),
-        );
-        return;
-      }
-      scheduledDate = DateTime(
-        _selectedDate!.year,
-        _selectedDate!.month,
-        _selectedDate!.day,
-        _selectedTime!.hour,
-        _selectedTime!.minute,
-      );
-    } else {
-      final confirmed = await _confirmPickupNow();
-      if (!confirmed) return;
-      scheduledDate = DateTime.now();
-    }
-
-    setState(() => _isLoading = true);
-
-    final Map<String, dynamic> body = {
-      "scheduled_date": scheduledDate.toIso8601String(),
-      "weight_kg": double.parse(_weightController.text),
-      "pickup_address": _addressController.text,
-      "restaurant_name": _employee?['restaurant_name'] ?? 'Unknown Restaurant',
-      "waste_type": _selectedWasteType,
-      "donation_drive": _selectedDonationDriveId,
-    };
-
-    dynamic result;
-    if (widget.pickup == null) {
-      final success = await ApiService.addTrashPickup(body);
-      result = success ? {} : null;
-    } else {
-      result = await ApiService.updateTrashPickup(widget.pickup!['id'], body);
-    }
-
-    setState(() => _isLoading = false);
-
-    if (result != null) {
-      if (!mounted) return;
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.pickup == null
-              ? "Pickup scheduled successfully!"
-              : "Pickup updated successfully!"),
-          backgroundColor: darwcosGreen,
-        ),
-      );
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to save pickup.")),
-      );
-    }
+    scheduledDate = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
+    );
+  } else {
+    final confirmed = await _confirmPickupNow();
+    if (!confirmed) return;
+    scheduledDate = DateTime.now();
   }
+
+  setState(() => _isLoading = true);
+
+  // ✅ Verify that the logged-in user is a restaurant employee (not driver)
+  final employeeProfile = await ApiService.getMyEmployeeProfile();
+  if (employeeProfile == null || employeeProfile['restaurant_name'] == null) {
+    setState(() => _isLoading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("⚠️ Only restaurant users can create pickups."),
+      ),
+    );
+    return;
+  }
+
+  final Map<String, dynamic> body = {
+    "scheduled_date": scheduledDate.toIso8601String(),
+    "weight_kg": double.parse(_weightController.text),
+    "pickup_address": _addressController.text,
+    "restaurant_name": employeeProfile['restaurant_name'] ?? 'Unknown Restaurant',
+    "waste_type": _selectedWasteType,
+    "donation_drive": _selectedDonationDriveId,
+  };
+
+  dynamic result;
+  if (widget.pickup == null) {
+    final success = await ApiService.addTrashPickup(body);
+    result = success ? {} : null;
+  } else {
+    result = await ApiService.updateTrashPickup(widget.pickup!['id'], body);
+  }
+
+  setState(() => _isLoading = false);
+
+  if (result != null) {
+    if (!mounted) return;
+    Navigator.pop(context, true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(widget.pickup == null
+            ? "Pickup scheduled successfully!"
+            : "Pickup updated successfully!"),
+        backgroundColor: darwcosGreen,
+      ),
+    );
+  } else {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Failed to save pickup.")),
+    );
+  }
+}
 
   // ---------------- UI ----------------
   @override

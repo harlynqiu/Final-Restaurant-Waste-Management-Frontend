@@ -844,4 +844,50 @@ static Future<List<dynamic>> getAvailablePickups() async {
   }
 }
 
+//start pickup 
+
+static Future<bool> startPickup(int id) async {
+  final token = await _getAccessToken();
+  final response = await http.patch(
+    Uri.parse('$baseUrl/trash_pickups/$id/start/'),
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+  );
+
+  if (response.statusCode == 200) {
+    debugPrint("🚀 Pickup #$id started successfully!");
+    return true;
+  } else {
+    debugPrint("❌ Failed to start pickup #$id → ${response.body}");
+    return false;
+  }
+}
+
+//complete pickup 
+static Future<Map<String, dynamic>> completePickupDetailed(int id) async {
+  final token = await _getAccessToken();
+  final url = Uri.parse('$baseUrl/trash_pickups/$id/complete/');
+  final response = await http.patch(
+    url,
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+  );
+
+  try {
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      return {"success": false, "message": response.body};
+    }
+  } catch (e) {
+    debugPrint("❌ Error decoding completePickup: $e");
+    return {"success": false, "message": "Decoding error"};
+  }
+}
+
+
 }

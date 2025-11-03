@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+// import 'package:firebase_core/firebase_core.dart'; // ❌ Commented out since Firebase not used yet
+// import 'firebase_options.dart'; // ❌ Commented out — generated later when you link Firebase
 
 // -------------------
 // 🖥️ Screen Imports
@@ -8,7 +10,14 @@ import 'screens/dashboard_screen.dart';
 import 'screens/available_pickups_screen.dart';
 import 'screens/pickup_map_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ Firebase init removed — will re-enable once Firebase is configured
+  // await Firebase.initializeApp(
+  //   options: DefaultFirebaseOptions.currentPlatform,
+  // );
+
   runApp(const MyApp());
 }
 
