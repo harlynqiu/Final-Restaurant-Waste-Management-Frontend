@@ -381,7 +381,9 @@ static Future<bool> register({
     }
   }
 
-  static Future<String> redeemVoucher(int voucherId) async {
+// ✅ Redeem a voucher (returns bool + handles messages)
+static Future<bool> redeemVoucher(int voucherId) async {
+  try {
     final res = await _withAuthRetry(() async {
       return http.post(
         Uri.parse("$baseUrl/rewards/redeem/"),
@@ -390,13 +392,19 @@ static Future<bool> register({
       );
     });
 
-    final data = jsonDecode(res.body);
-    if (res.statusCode == 200) {
-      return data['success'] ?? "Redeemed successfully!";
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      final data = jsonDecode(res.body);
+      debugPrint("✅ Voucher redeemed successfully → $data");
+      return true;
     } else {
-      throw Exception(data['error'] ?? "Redemption failed");
+      debugPrint("❌ Failed to redeem voucher → ${res.statusCode}: ${res.body}");
+      return false;
     }
+  } catch (e) {
+    debugPrint("⚠️ redeemVoucher exception: $e");
+    return false;
   }
+}
 
   static Future<List<dynamic>> getRewardRedemptions() async {
     final res = await _withAuthRetry(() async {
@@ -885,7 +893,7 @@ static Future<Map<String, dynamic>> completePickupDetailed(int id) async {
     }
   } catch (e) {
     debugPrint("❌ Error decoding completePickup: $e");
-    return {"success": false, "message": "Decoding error"};
+    return {"success": false, "message": "Decoding error"}; 
   }
 }
 

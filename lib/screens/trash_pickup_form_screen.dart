@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import 'package:flutter/services.dart';
 
 class TrashPickupFormScreen extends StatefulWidget {
   final Map<String, dynamic>? pickup;
@@ -297,13 +298,30 @@ Future<void> _submit() async {
                             v == null || v.isEmpty ? "Address missing" : null,
                       ),
                       const SizedBox(height: 16),
+                      
                       TextFormField(
                         controller: _weightController,
-                        decoration:
-                            _fieldDecoration(label: "Weight (kg)", icon: Icons.scale),
-                        keyboardType: TextInputType.number,
-                        validator: (v) =>
-                            v == null || v.isEmpty ? "Enter weight" : null,
+                        decoration: _fieldDecoration(label: "Weight (kg)", icon: Icons.scale),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$')),
+                        ],
+                        validator: (v) {
+                          if (v == null || v.isEmpty) {
+                            return "Enter weight";
+                          }
+                          final weight = double.tryParse(v);
+                          if (weight == null) {
+                            return "Please enter a valid number";
+                          }
+                          if (weight <= 0) {
+                            return "Weight must be greater than 0 kg";
+                          }
+                          if (weight > 50) {
+                            return "Weight cannot exceed 50 kg (limit for motorcycle pickups)";
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(

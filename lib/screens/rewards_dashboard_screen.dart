@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import 'reward_voucher_screen.dart';
 import 'reward_redemption_history_screen.dart';
+import 'reward_voucher_screen.dart';
 
 class RewardsDashboardScreen extends StatefulWidget {
   const RewardsDashboardScreen({super.key});
@@ -35,12 +35,17 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _fadeController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _fadeIn = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
-    _glowController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
-    _glowAnimation = Tween<double>(begin: 0.0, end: 15.0).animate(_glowController);
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _glowAnimation =
+        Tween<double>(begin: 0.0, end: 15.0).animate(_glowController);
     _loadRewards();
   }
 
@@ -135,7 +140,6 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     // 🏆 HEADER
-                    // 🏆 HEADER (MODERNIZED)
                     SliverAppBar(
                       expandedHeight: 260,
                       pinned: true,
@@ -183,12 +187,14 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                 height: 70,
                                 decoration: const BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(40),
+                                  ),
                                 ),
                               ),
                             ),
 
-                            // 🏅 Content (Icon + Points + Subtitle)
+                            // 🏅 Icon + Points
                             Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -196,16 +202,20 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                   alignment: Alignment.center,
                                   children: [
                                     AnimatedContainer(
-                                      duration: const Duration(milliseconds: 800),
+                                      duration:
+                                          const Duration(milliseconds: 800),
                                       height: _isGlowing ? 120 : 110,
                                       width: _isGlowing ? 120 : 110,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.white.withOpacity(0.3),
-                                            blurRadius: _isGlowing ? 30 : 20,
-                                            spreadRadius: _isGlowing ? 10 : 5,
+                                            color:
+                                                Colors.white.withOpacity(0.3),
+                                            blurRadius:
+                                                _isGlowing ? 30 : 20,
+                                            spreadRadius:
+                                                _isGlowing ? 10 : 5,
                                           ),
                                         ],
                                       ),
@@ -270,7 +280,8 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                 child: Card(
                                   elevation: 6,
                                   shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20)),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                   child: Padding(
                                     padding: const EdgeInsets.all(20),
                                     child: Column(
@@ -315,52 +326,36 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                 child: AnimatedBuilder(
                                   animation: _glowAnimation,
                                   builder: (context, child) {
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        boxShadow: _isGlowing
-                                            ? [
-                                                BoxShadow(
-                                                  color: darwcosGreen
-                                                      .withOpacity(0.4),
-                                                  blurRadius:
-                                                      _glowAnimation.value,
-                                                  spreadRadius:
-                                                      _glowAnimation.value / 3,
-                                                ),
-                                              ]
-                                            : [],
+                                    return Card(
+                                      elevation: 5,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(20),
                                       ),
-                                      child: Card(
-                                        elevation: 5,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(20),
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Image.asset(
-                                                "assets/images/trash_badge1.png",
-                                                height: 60,
-                                                width: 60,
-                                              ),
-                                              const SizedBox(height: 10),
-                                              Text(_currentBadge,
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 14)),
-                                              const SizedBox(height: 6),
-                                              Text("Next: $_nextBadge",
-                                                  style: const TextStyle(
-                                                      fontSize: 12,
-                                                      color: Colors.black54)),
-                                            ],
-                                          ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Image.asset(
+                                              "assets/images/trash_badge1.png",
+                                              height: 60,
+                                              width: 60,
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Text(_currentBadge,
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    fontSize: 14)),
+                                            const SizedBox(height: 6),
+                                            Text("Next: $_nextBadge",
+                                                style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.black54)),
+                                          ],
                                         ),
                                       ),
                                     );
@@ -373,7 +368,7 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                       ),
                     ),
 
-                    // 🎁 REDEEM + HISTORY BUTTONS
+                    // 🧾 HISTORY + REDEEM VOUCHERS BUTTONS
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -381,37 +376,14 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                         child: Row(
                           children: [
                             Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) =>
-                                            const RewardVoucherScreen()),
-                                  );
-                                },
-                                icon: const Icon(Icons.card_giftcard,
-                                    color: Colors.white),
-                                label: const Text("Redeem Points", style: TextStyle(color: Colors.white),),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: darwcosGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 14, horizontal: 20),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                        builder: (context) =>
-                                            const RewardRedemptionHistoryScreen()),
+                                      builder: (context) =>
+                                          const RewardRedemptionHistoryScreen(),
+                                    ),
                                   );
                                 },
                                 icon: const Icon(Icons.history,
@@ -423,9 +395,40 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                       fontWeight: FontWeight.bold),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: darwcosGreen),
+                                  side:
+                                      const BorderSide(color: darwcosGreen),
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 14, horizontal: 20),
+                                      vertical: 14, horizontal: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const RewardVoucherScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.card_giftcard,
+                                    color: Colors.white),
+                                label: const Text(
+                                  "Redeem Vouchers",
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: darwcosGreen,
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 14, horizontal: 10),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
@@ -454,10 +457,12 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                             child: Padding(
                               padding: EdgeInsets.all(30),
                               child: Center(
-                                  child: Text("No transactions yet.",
-                                      style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.black54))),
+                                child: Text(
+                                  "No transactions yet.",
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.black54),
+                                ),
+                              ),
                             ),
                           )
                         : SliverList(
@@ -468,7 +473,8 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                     t['transaction_type'] ?? 'earn';
                                 final color = _getTransactionColor(type);
                                 final icon = _getTransactionIcon(type);
-                                final prefix = type == "redeem" ? "-" : "+";
+                                final prefix =
+                                    type == "redeem" ? "-" : "+";
 
                                 return Container(
                                   margin: const EdgeInsets.symmetric(
@@ -478,7 +484,8 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                     borderRadius: BorderRadius.circular(14),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.grey.withOpacity(0.1),
+                                        color:
+                                            Colors.grey.withOpacity(0.1),
                                         blurRadius: 5,
                                         offset: const Offset(0, 3),
                                       ),
@@ -491,10 +498,11 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                                       child: Icon(icon, color: color),
                                     ),
                                     title: Text(
-                                        t['description'] ?? "Transaction",
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 15)),
+                                      t['description'] ?? "Transaction",
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15),
+                                    ),
                                     subtitle: Text(
                                         "Date: ${t['created_at'].toString().substring(0, 16)}"),
                                     trailing: Text(
@@ -528,34 +536,62 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
                             child: Padding(
                               padding: EdgeInsets.all(20),
                               child: Center(
-                                  child: Text(
-                                      "You haven’t redeemed any rewards yet.",
-                                      style: TextStyle(color: Colors.black54))),
+                                child: Text(
+                                  "You haven’t redeemed any rewards yet.",
+                                  style: TextStyle(color: Colors.black54),
+                                ),
+                              ),
                             ),
                           )
-                        : SliverList(
+                        : SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              childAspectRatio: 1,
+                            ),
                             delegate: SliverChildBuilderDelegate(
                               (context, i) {
                                 final reward = _myRewards[i];
                                 return Card(
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 6),
-                                  elevation: 2,
+                                  elevation: 3,
                                   shape: RoundedRectangleBorder(
                                       borderRadius:
-                                          BorderRadius.circular(16)),
-                                  child: ListTile(
-                                    leading: const Icon(Icons.card_giftcard,
-                                        color: darwcosGreen),
-                                    title: Text(
-                                        reward["reward_name"] ?? "Unknown"),
-                                    subtitle: Text(
-                                        "Type: ${reward["reward_type"] ?? "unknown"} • Status: ${reward["status"] ?? "completed"}"),
-                                    trailing: Text(
-                                      "${reward["points"] ?? 0} pts",
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: darwcosGreen),
+                                          BorderRadius.circular(14)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.card_giftcard,
+                                            color: darwcosGreen, size: 40),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          reward["reward_name"] ?? "Reward",
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          "Type: ${reward["reward_type"] ?? "N/A"}",
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.black54),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          "${reward["points"] ?? 0} pts",
+                                          style: const TextStyle(
+                                              color: darwcosGreen,
+                                              fontWeight:
+                                                  FontWeight.bold),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 );
