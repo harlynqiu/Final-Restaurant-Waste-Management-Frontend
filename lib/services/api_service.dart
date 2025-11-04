@@ -9,10 +9,10 @@ class ApiService {
   // 🔗 BASE URL (pick ONE)
   // ============================
   // Desktop/Web (Django on same machine):
-  static const String baseUrl = "http://127.0.0.1:8000/api";
+  //static const String baseUrl = "http://127.0.0.1:8000/api";
    // static const String baseUrl = "http://192.168.254.191/api";
   // Android emulator:
-  // static const String baseUrl = "http://10.0.2.2:8000/api";
+  static const String baseUrl = "http://10.0.2.2:8000/api";
   // Physical phone on same Wi-Fi (replace with your PC's LAN IP):
   // static const String baseUrl = "http://192.168.254.191:8000/api";
 
@@ -73,111 +73,199 @@ class ApiService {
   }
 
 
-  // ============================
-  // 👤 Auth
-  // ============================
-    static Future<bool> loginUser(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/token/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
-    );
+  //----------------------- LOGIN USER ---------------------------------------------------------------
+  static Future<Map<String, dynamic>> loginUser(
+      String username, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/token/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      );
 
-    if (response.statusCode == 200) {
+      if (response.statusCode != 200) {
+        debugPrint("Login failed: ${response.body}");
+        return {"success": false, "message": "Invalid credentials"};
+      }
+
       final data = jsonDecode(response.body);
       final prefs = await SharedPreferences.getInstance();
 
-      // ✅ Store under the same key that all other requests use
       await prefs.setString('access_token', data['access']);
       await prefs.setString('refresh_token', data['refresh']);
-      debugPrint("✅ Login successful — tokens saved");
-      return true;
+      debugPrint("Login successful — tokens saved");
+
+      Map<String, dynamic>? userProfile;
+
+      final empRes = await http.get(
+        Uri.parse("$baseUrl/employees/me/"),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${data['access']}',
+        },
+      );
+
+      if (empRes.statusCode == 200) {
+        userProfile = jsonDecode(empRes.body);
+      } else {
+        final drvRes = await http.get(
+          Uri.parse("$baseUrl/drivers/me/"),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${data['access']}',
+          },
+        );
+
+        if (drvRes.statusCode == 200) {
+          userProfile = jsonDecode(drvRes.body);
+        }
+      }
+
+      if (userProfile == null) {
+        debugPrint("No user profile found after login");
+        return {"success": false, "message": "User profile not found"};
+      }
+
+    String role = 'employee';
+    if (userProfile.containsKey('vehicle_type') || userProfile.containsKey('license_number')) {
+      role = 'driver';
     } else {
-      debugPrint("❌ Login failed: ${response.body}");
-      return false;
+      role = (userProfile['position']?.toString().toLowerCase() ??
+              userProfile['role']?.toString().toLowerCase() ??
+              'employee');
+    }
+      final status =
+          userProfile['status']?.toString().toLowerCase() ?? 'unknown';
+      final isVerified = (status == 'active' ||
+          status == 'verified' ||
+          status == 'approved' ||
+          status == 'available');
+
+      debugPrint("👤 Role: $role | Status: $status | Verified: $isVerified");
+
+      return {
+        "success": true,
+        "role": role,
+        "verified": isVerified,
+        "status": status,
+        "profile": userProfile,
+      };
+    } catch (e) {
+      debugPrint("🔥 Exception in loginUser: $e");
+      return {"success": false, "message": "Unexpected error: $e"};
     }
   }
 
-  static Future<bool> refreshToken() async {
-    final refresh = await _getRefreshToken();
-    if (refresh == null) return false;
-
-    final res = await http.post(
-      Uri.parse('$baseUrl/token/refresh/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'refresh': refresh}),
-    );
-
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      await _setAccessToken(data['access']);
-      debugPrint("🔄 Token refreshed successfully");
-      return true;
-    } else {
-      debugPrint("❌ Token refresh failed: ${res.body}");
-      return false;
-    }
-  }
-
+  // ============================
+  // 🚪 Logout
+  // ============================
   static Future<void> logout() async {
     await _clearTokens();
+    debugPrint("🚪 User logged out — tokens cleared.");
   }
 
-
   // ============================
-  // 👤 REGISTER USER / EMPLOYEE (Updated)
+  // ♻️ Refresh Token
   // ============================
-static Future<bool> register({
-  required String username,
-  required String password,
-  required String email,
-  required String name,
-  required String position,
-  String? restaurantName,
-  String? address,
-  double? latitude,
-  double? longitude,
-}) async {
-  final url = Uri.parse("$baseUrl/employees/register/");
+  static Future<bool> refreshToken() async {
+    try {
+      final refresh = await _getRefreshToken();
+      if (refresh == null) {
+        debugPrint("⚠️ No refresh token found.");
+        return false;
+      }
 
-  final body = jsonEncode({
-    "username": username.trim(),
-    "password": password.trim(),
-    "email": email.trim(),
-    "name": name.trim(),
-    "position": position.trim(),
-    "restaurant_name": restaurantName?.trim() ?? "",
-    "address": address?.trim() ?? "",
-    "latitude": latitude,      // ✅ added
-    "longitude": longitude,    // ✅ added
-  });
+      final res = await http.post(
+        Uri.parse('$baseUrl/token/refresh/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh': refresh}),
+      );
 
-  try {
-    final response = await http.post(
-      url,
-      headers: {"Content-Type": "application/json"},
-      body: body,
-    );
-
-    if (response.statusCode == 201) {
-      debugPrint("✅ Registration successful → ${response.body}");
-      return true;
-    } else if (response.statusCode == 400) {
-      final data = jsonDecode(response.body);
-      debugPrint("⚠️ Validation error: $data");
-      return false;
-    } else if (response.statusCode == 405) {
-      debugPrint("🚫 Method Not Allowed — check your Django route /api/employees/register/");
-      return false;
-    } else {
-      debugPrint("❌ Registration failed (${response.statusCode}): ${response.body}");
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        await _setAccessToken(data['access']);
+        debugPrint("🔄 Token refreshed successfully");
+        return true;
+      } else {
+        debugPrint("❌ Token refresh failed: ${res.body}");
+        await _clearTokens();
+        return false;
+      }
+    } catch (e) {
+      debugPrint("🔥 Exception during token refresh: $e");
       return false;
     }
-  } catch (e) {
-    debugPrint("🔥 Registration error: $e");
-    return false;
   }
-}
+
+//------------- SIGN UP ------------------------------------------------------------------------------------------------------
+  static Future<Map<String, dynamic>> signupUser({
+    required String username,
+    required String password,
+    required String email,
+    required String name,
+    required String position,
+    String? restaurantName,
+    String? address,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      debugPrint("Starting signup for $email ...");
+
+      final body = jsonEncode({
+        "username": username.trim(),
+        "password": password.trim(),
+        "email": email.trim(),
+        "name": name.trim(),
+        "position": position.trim(),
+        "restaurant_name": restaurantName?.trim() ?? "",
+        "address": address?.trim() ?? "",
+        "latitude": latitude,
+        "longitude": longitude,
+      });
+
+      final response = await http.post(
+        Uri.parse("$baseUrl/employees/register/"),
+        headers: {"Content-Type": "application/json"},
+        body: body,
+      );
+
+      if (response.statusCode != 201) {
+        debugPrint("Signup failed: ${response.statusCode} → ${response.body}");
+        return {
+          "success": false,
+          "message": "Signup failed — please check your details",
+          "details": response.body
+        };
+      }
+
+      final data = jsonDecode(response.body);
+      debugPrint("Signup successful → $data");
+
+      final userId = data['id'] ?? data['user_id'] ?? 0;
+      final role = (position.toLowerCase().contains('driver'))
+          ? 'driver'
+          : 'employee';
+
+      debugPrint("Created user $userId as $role (unverified)");
+
+      bool requiresVerification = role == 'employee';
+
+      return {
+        "success": true,
+        "message": "Registration successful",
+        "role": role,
+        "requiresVerification": requiresVerification,
+        "profile": data,
+      };
+    } catch (e) {
+      debugPrint("🔥 Exception during signup: $e");
+      return {
+        "success": false,
+        "message": "Unexpected error: $e",
+      };
+    }
+  }
 
   // ---------------- GET CURRENT USER ----------------
   static Future<Map<String, dynamic>> getCurrentUser() async {
@@ -197,30 +285,7 @@ static Future<bool> register({
     }
   }
 
-  // 🛑 Cancel a pickup
-  static Future<bool> cancelPickup(int pickupId) async {
-    try {
-      final res = await _withAuthRetry(() async {
-        return http.patch(
-          Uri.parse("$baseUrl/trash_pickups/$pickupId/cancel/"),
-          headers: await _authHeaders(),
-        );
-      });
 
-      debugPrint("🛑 [PATCH] Cancel pickup #$pickupId → ${res.statusCode}");
-
-      if (res.statusCode == 200) {
-        debugPrint("✅ Pickup #$pickupId cancelled successfully!");
-        return true;
-      } else {
-        debugPrint("❌ Failed to cancel pickup: ${res.statusCode} → ${res.body}");
-        return false;
-      }
-    } catch (e) {
-      debugPrint("⚠️ Cancel pickup exception: $e");
-      return false;
-    }
-  }
 
 
   // ------------------------------
@@ -235,85 +300,132 @@ static Future<bool> register({
     };
   }
 
-  // ============================
-  // 🗑️ Trash Pickups
-  // ============================
+  // ----------------------  TRASH PICKUPS  ----------------------------------------------
   static Future<List<dynamic>> getTrashPickups() async {
-    final res = await _withAuthRetry(() async {
-      return http.get(
-        Uri.parse("$baseUrl/trash_pickups/"),
-        headers: await _authHeaders(),
-      );
-    });
+    try {
+      final response = await _withAuthRetry(() async {
+        return http.get(
+          Uri.parse("$baseUrl/trash_pickups/"),
+          headers: await _authHeaders(),
+        );
+      });
 
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else if (response.statusCode == 401) {
+        throw Exception(" Unauthorized. Please log in again.");
+      } else {
+        throw Exception(
+          " Failed to load pickups: ${response.statusCode} → ${response.body}",
+        );
+      }
+    } catch (e) {
+      debugPrint(" Exception in getTrashPickups: $e");
+      rethrow;
     }
-
-    if (res.statusCode == 401) {
-      throw Exception("Unauthorized. Please log in again.");
-    }
-
-    throw Exception("Failed to load pickups: ${res.statusCode} ${res.body}");
   }
 
-  // Optional alias that matches your older call sites
-  static Future<List<dynamic>> getTrashPickupsAuto() => getTrashPickups();
-
+  // ---------------------- CREATE PICKUP ----------------------------------------------
   static Future<bool> createTrashPickup(Map<String, dynamic> data) async {
-    final res = await _withAuthRetry(() async {
-      return http.post(
-        Uri.parse("$baseUrl/trash_pickups/"),
-        headers: await _authHeaders(),
-        body: jsonEncode(data),
-      );
-    });
+    try {
+      final response = await _withAuthRetry(() async {
+        return http.post(
+          Uri.parse("$baseUrl/trash_pickups/"),
+          headers: await _authHeaders(),
+          body: jsonEncode(data),
+        );
+      });
 
-    if (res.statusCode == 201) return true;
-    debugPrint("❌ Create pickup failed (${res.statusCode}): ${res.body}");
-    return false;
+      if (response.statusCode == 201) {
+        debugPrint(" Trash pickup created successfully!");
+        return true;
+      } else {
+        debugPrint(
+          " Create pickup failed → ${response.statusCode}: ${response.body}",
+        );
+        return false;
+      }
+    } catch (e) {
+      debugPrint(" Exception in createTrashPickup: $e");
+      return false;
+    }
   }
 
-  static Future<bool> addTrashPickup(Map<String, dynamic> body) async {
-    // kept for backward compatibility; same as create
-    return createTrashPickup(body);
-  }
-
+  // ---------------------- UPDATE PICKUP ----------------------------------------------
   static Future<Map<String, dynamic>?> updateTrashPickup(
-      int id, Map<String, dynamic> data) async {
+    int id,
+    Map<String, dynamic> data,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('access_token');
 
+      if (token == null) {
+        debugPrint(" No token found — user not authenticated.");
+        return null;
+      }
+
       final response = await http.patch(
-        Uri.parse('$baseUrl/trash_pickups/$id/'),
+        Uri.parse("$baseUrl/trash_pickups/$id/"),
         headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
         },
         body: jsonEncode(data),
       );
 
-      if (response.statusCode == 200 ||
-          response.statusCode == 201 ||
-          response.statusCode == 202) {
-        final body = jsonDecode(response.body);
-        debugPrint("✅ Pickup #$id updated successfully → ${body['status']}");
-        return body;
+      if ([200, 201, 202].contains(response.statusCode)) {
+        final result = jsonDecode(response.body);
+        debugPrint(
+          " Pickup #$id updated successfully → ${result['status'] ?? 'updated'}",
+        );
+        return result;
       } else {
-        debugPrint("❌ Failed to update pickup #$id: ${response.body}");
+        debugPrint(
+          " Failed to update pickup #$id → ${response.statusCode}: ${response.body}",
+        );
         return null;
       }
     } catch (e) {
-      debugPrint("🚨 Error updating pickup #$id: $e");
+      debugPrint(" Exception while updating pickup #$id: $e");
       return null;
     }
   }
 
-  // ============================
-  // 🏆 Rewards
-  // ============================
-  // If you need the raw object (e.g., {"points": 10, ...})
+  // ---------------------- CANCEL PICKUP ----------------------------------------------
+  static Future<bool> cancelPickup(int pickupId) async {
+    try {
+      final res = await _withAuthRetry(() async {
+        return http.patch(
+          Uri.parse("$baseUrl/trash_pickups/$pickupId/cancel/"),
+          headers: await _authHeaders(),
+        );
+      });
+
+      debugPrint(" [PATCH] Cancel pickup #$pickupId → ${res.statusCode}");
+
+      if (res.statusCode == 200) {
+        debugPrint(" Pickup #$pickupId cancelled successfully!");
+        return true;
+      } else {
+        debugPrint(" Failed to cancel pickup: ${res.statusCode} → ${res.body}");
+        return false;
+      }
+    } catch (e) {
+      debugPrint(" Cancel pickup exception: $e");
+      return false;
+    }
+  }
+
+  // 🔄 Alias (for backward compatibility)
+  static Future<List<dynamic>> getTrashPickupsAuto() => getTrashPickups();
+
+  // 🧩 Convenience method (kept for compatibility)
+  static Future<bool> addTrashPickup(Map<String, dynamic> body) async {
+    return createTrashPickup(body);
+  }
+
+  // ----------------------  REWARDS ----------------------------------------------
   static Future<Map<String, dynamic>> getRewardPoints() async {
     final res = await _withAuthRetry(() async {
       return http.get(
@@ -328,7 +440,6 @@ static Future<bool> register({
     throw Exception("Failed to load reward points: ${res.statusCode}");
   }
 
-  // If you only need the integer points (used by your UI chip)
   static Future<int> getUserPoints() async {
     try {
       final res = await _withAuthRetry(() async {
@@ -342,11 +453,11 @@ static Future<bool> register({
         final data = jsonDecode(res.body);
         return data['points'] ?? 0;
       } else {
-        debugPrint("❌ getUserPoints failed: ${res.statusCode} - ${res.body}");
+        debugPrint(" getUserPoints failed: ${res.statusCode} - ${res.body}");
         return 0;
       }
     } catch (e) {
-      debugPrint("⚠️ getUserPoints error: $e");
+      debugPrint(" getUserPoints error: $e");
       return 0;
     }
   }
@@ -381,7 +492,6 @@ static Future<bool> register({
     }
   }
 
-// ✅ Redeem a voucher (returns bool + handles messages)
 static Future<bool> redeemVoucher(int voucherId) async {
   try {
     final res = await _withAuthRetry(() async {
@@ -394,14 +504,14 @@ static Future<bool> redeemVoucher(int voucherId) async {
 
     if (res.statusCode == 200 || res.statusCode == 201) {
       final data = jsonDecode(res.body);
-      debugPrint("✅ Voucher redeemed successfully → $data");
+      debugPrint(" Voucher redeemed successfully → $data");
       return true;
     } else {
-      debugPrint("❌ Failed to redeem voucher → ${res.statusCode}: ${res.body}");
+      debugPrint(" Failed to redeem voucher → ${res.statusCode}: ${res.body}");
       return false;
     }
   } catch (e) {
-    debugPrint("⚠️ redeemVoucher exception: $e");
+    debugPrint(" redeemVoucher exception: $e");
     return false;
   }
 }
@@ -424,7 +534,7 @@ static Future<bool> redeemVoucher(int voucherId) async {
   // ============================
   // 👥 Employees
   // ============================
-   static Future<List<dynamic>> getEmployees() async {
+  static Future<List<dynamic>> getEmployees() async {
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString('access_token');
 
@@ -452,33 +562,53 @@ static Future<bool> redeemVoucher(int voucherId) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
 
-    final response = await http.post(
-      Uri.parse('$baseUrl/employees/'), // ✅ Correct endpoint
+    // Fetch current user's profile to get restaurant info
+    final profileRes = await http.get(
+      Uri.parse('$baseUrl/employees/me/'),
       headers: {
         'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (profileRes.statusCode != 200) {
+      debugPrint('❌ Failed to get current user profile → ${profileRes.body}');
+      throw Exception('Failed to identify current restaurant');
+    }
+
+    final userProfile = jsonDecode(profileRes.body);
+    final restaurantName = userProfile['restaurant_name'] ?? 'Unknown Restaurant';
+    final address = userProfile['address'] ?? 'Unknown Address';
+
+    // ✅ Create new employee
+    final response = await http.post(
+      Uri.parse('$baseUrl/employees/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
       },
       body: jsonEncode({
-        'username': email.split('@')[0], // required for backend
-        'password': 'default123',
+        'username': email.split('@')[0],
+        'password': 'default123', // or allow random generation
         'name': name,
         'email': email,
         'position': position,
-        'restaurant_name': 'My Restaurant',
-        'address': 'Davao City',
+        'restaurant_name': restaurantName,
+        'address': address,
       }),
     );
 
+    debugPrint('📡 [POST] /employees → ${response.statusCode}');
+    debugPrint('🧾 Response: ${response.body}');
+
     if (response.statusCode != 201) {
-      debugPrint('❌ Failed to add employee: ${response.statusCode} ${response.body}');
-      throw Exception('Failed to add employee');
+      throw Exception('Failed to add employee → ${response.body}');
     }
   }
 
 
-  // ============================
-  // 💳 Subscriptions
-  // ============================
+  // ----------------------  SUBSCRIPTIONS ----------------------------------------------
+  
   static Future<List<dynamic>> getPlans() async {
     final res = await _withAuthRetry(() async {
       return http.get(
@@ -719,71 +849,65 @@ static Future<bool> redeemVoucher(int voucherId) async {
       }
     }
 
-// ============================
-// 🚗 DRIVER PICKUP INTEGRATION
-// ============================
+//---------------------- DRIVER PICKUPS -------------------------------------------------------------------------------
 
-// 🟢 Fetch all available pickups (unassigned)
 static Future<List<dynamic>> getAvailablePickups() async {
   final response = await http.get(
-    Uri.parse('$baseUrl/trash_pickups/available/'), // ✅ Matches Django route
+    Uri.parse('$baseUrl/trash_pickups/available/'), 
     headers: await getAuthHeaders(),
   );
 
-  debugPrint("📦 [GET] Available pickups → ${response.statusCode}");
+  debugPrint(" [GET] Available pickups → ${response.statusCode}");
   if (response.statusCode == 200) {
     return jsonDecode(response.body);
   } else {
-    debugPrint("❌ Failed to load pickups: ${response.body}");
+    debugPrint(" Failed to load pickups: ${response.body}");
     throw Exception('Failed to load available pickups');
   }
 }
 
-  // 🟢 Accept a pickup (driver claims it)
   static Future<bool> acceptPickup(int pickupId) async {
     final response = await http.patch(
-      Uri.parse('$baseUrl/trash_pickups/$pickupId/accept/'), // ✅ Matches /api/trash_pickups/<id>/accept/
+      Uri.parse('$baseUrl/trash_pickups/$pickupId/accept/'), 
       headers: await getAuthHeaders(),
     );
 
-    debugPrint("🚚 [PATCH] Accept pickup #$pickupId → ${response.statusCode}");
+    debugPrint(" [PATCH] Accept pickup #$pickupId → ${response.statusCode}");
     if (response.statusCode == 200) {
-      debugPrint("✅ Pickup #$pickupId accepted successfully!");
+      debugPrint(" Pickup #$pickupId accepted successfully!");
       return true;
     } else {
-      debugPrint("❌ Failed to accept pickup: ${response.body}");
+      debugPrint(" Failed to accept pickup: ${response.body}");
       return false;
     }
   }
 
-  // 🟢 Mark pickup as completed (driver)
   static Future<bool> completePickup(int pickupId) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/trash_pickups/$pickupId/complete/'),
       headers: await getAuthHeaders(),
     );
 
-    debugPrint("✅ [PATCH] Complete pickup #$pickupId → ${response.statusCode}");
+    debugPrint(" [PATCH] Complete pickup #$pickupId → ${response.statusCode}");
     return response.statusCode == 200;
   }
 
-  // 🟢 Fetch driver’s assigned pickups
+  // Fetch driver’s assigned pickups
   static Future<List<dynamic>> getAssignedPickups() async {
     final response = await http.get(
       Uri.parse('$baseUrl/trash_pickups/'),
       headers: await getAuthHeaders(),
     );
 
-    debugPrint("🚚 [GET] Assigned pickups → ${response.statusCode}");
+    debugPrint(" [GET] Assigned pickups → ${response.statusCode}");
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      debugPrint("❌ Failed to load assigned pickups: ${response.body}");
+      debugPrint(" Failed to load assigned pickups: ${response.body}");
       throw Exception('Failed to load assigned pickups');
     }
   }
 
-  // ✅ Fixed: Uses proper token and refresh retry
   static Future<Map<String, dynamic>?> getMyEmployeeProfile() async {
     final res = await _withAuthRetry(() async {
       return http.get(
@@ -792,29 +916,27 @@ static Future<List<dynamic>> getAvailablePickups() async {
       );
     });
 
-    debugPrint("👤 [GET] /employees/me → ${res.statusCode} ${res.body}");
+    debugPrint(" [GET] /employees/me → ${res.statusCode} ${res.body}");
 
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else if (res.statusCode == 401) {
-      debugPrint("⚠️ Unauthorized — token missing or invalid");
+      debugPrint(" Unauthorized — token missing or invalid");
       return null;
     } else {
-      debugPrint("⚠️ Failed to fetch employee profile: ${res.statusCode} ${res.body}");
+      debugPrint(" Failed to fetch employee profile: ${res.statusCode} ${res.body}");
       return null;
     }
   }
 
-  // ============================
-  // 🚗 UPDATE DRIVER LOCATION
-  // ============================
+  // ------------------------ DRIVER LOCATION ---------------------------------------------------
   static Future<bool> updateDriverLocation(double latitude, double longitude) async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(_kAccess);
 
     if (token == null) {
-      if (kDebugMode) print("❌ No token found. User not logged in.");
+      if (kDebugMode) print("No token found. User not logged in.");
       return false;
     }
 
@@ -837,17 +959,17 @@ static Future<List<dynamic>> getAvailablePickups() async {
       if (kDebugMode) print("✅ Location updated successfully → ${response.body}");
       return true;
     } else if (response.statusCode == 404) {
-      if (kDebugMode) print("❌ [404] Driver not found → ${response.body}");
+      if (kDebugMode) print(" [404] Driver not found → ${response.body}");
       return false;
     } else if (response.statusCode == 401) {
-      if (kDebugMode) print("❌ [401] Unauthorized → ${response.body}");
+      if (kDebugMode) print(" [401] Unauthorized → ${response.body}");
       return false;
     } else {
-      if (kDebugMode) print("⚠️ Unexpected error → ${response.statusCode}: ${response.body}");
+      if (kDebugMode) print(" Unexpected error → ${response.statusCode}: ${response.body}");
       return false;
     }
   } catch (e) {
-    if (kDebugMode) print("❌ Exception updating location: $e");
+    if (kDebugMode) print(" Exception updating location: $e");
     return false;
   }
 }

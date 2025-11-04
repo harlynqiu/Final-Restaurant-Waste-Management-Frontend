@@ -36,8 +36,9 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Failed to load: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to load: $e")),
+      );
       setState(() => _loading = false);
     }
   }
@@ -45,12 +46,12 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
   Future<void> _cancelAutoRenew() async {
     try {
       final msg = await ApiService.cancelAutoRenew();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(msg)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       _loadData();
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Cancel failed: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Cancel failed: $e")),
+      );
     }
   }
 
@@ -62,36 +63,37 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text("Subscribe to $planName"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Choose your payment method:"),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: "Payment Method",
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("Choose your payment method:"),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: "Payment Method",
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: "gcash", child: Text("GCash")),
+                    DropdownMenuItem(value: "card", child: Text("Card")),
+                    DropdownMenuItem(value: "bank", child: Text("Bank Transfer")),
+                    DropdownMenuItem(value: "cash", child: Text("Cash")),
+                  ],
+                  onChanged: (val) => selectedMethod = val,
                 ),
-                items: const [
-                  DropdownMenuItem(value: "gcash", child: Text("GCash")),
-                  DropdownMenuItem(value: "card", child: Text("Card")),
-                  DropdownMenuItem(value: "bank", child: Text("Bank Transfer")),
-                  DropdownMenuItem(value: "cash", child: Text("Cash")),
-                ],
-                onChanged: (val) => selectedMethod = val,
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: voucherController,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: "Voucher Code (optional)",
+                const SizedBox(height: 10),
+                TextField(
+                  controller: voucherController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: "Voucher Code (optional)",
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -133,15 +135,16 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
       );
       _loadData();
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Subscribe failed: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Subscribe failed: $e")),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFFF8F9F8),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
@@ -164,17 +167,16 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
               child: SingleChildScrollView(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_sub == null) _buildNoSubscriptionView(),
                     if (_sub != null) _buildSubscriptionCard(),
                     if (_sub != null) _buildPaymentHistoryCard(),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 28),
                     _buildAvailablePlansSection(),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 36),
                     const Center(
                       child: Text(
                         "D.A.R.W.C.O.S",
@@ -192,12 +194,11 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
     );
   }
 
-  // No active subscription
   Widget _buildNoSubscriptionView() {
     return Column(
       children: const [
         Icon(Icons.info_outline, color: Colors.grey, size: 60),
-        SizedBox(height: 16),
+        SizedBox(height: 14),
         Text(
           "No active subscription found.",
           style: TextStyle(
@@ -210,7 +211,6 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
     );
   }
 
-  // Active subscription card
   Widget _buildSubscriptionCard() {
     final planName = _sub?['plan_name'] ?? "Unknown Plan";
     final status = _sub?['status'] ?? "unknown";
@@ -219,7 +219,6 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
     final autoRenew = _sub?['auto_renew'] == true;
     final isActive = _sub?['is_active'] == true;
 
-    // 🖼 Determine the image for the active plan
     String imageAsset = "";
     final lowerName = planName.toLowerCase();
     if (lowerName.contains("basic")) {
@@ -244,33 +243,29 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🖼 Plan header with image + name
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  if (imageAsset.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        imageAsset,
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  if (imageAsset.isNotEmpty) const SizedBox(width: 12),
-                  Text(
-                    planName,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: darwcosGreen,
-                    ),
+              if (imageAsset.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    imageAsset,
+                    width: 55,
+                    height: 55,
+                    fit: BoxFit.cover,
                   ),
-                ],
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  planName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: darwcosGreen,
+                  ),
+                ),
               ),
               Container(
                 padding:
@@ -290,19 +285,18 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 12),
           _buildRow("Start Date", start),
           _buildRow("End Date", end),
-          const SizedBox(height: 16),
-
-          // 🔁 Action buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            alignment: WrapAlignment.spaceBetween,
             children: [
               if (autoRenew)
                 TextButton.icon(
-                  icon: const Icon(Icons.cancel, color: Colors.red),
+                  icon: const Icon(Icons.cancel, color: Colors.red, size: 20),
                   label: const Text(
                     "Cancel Auto-Renew",
                     style: TextStyle(color: Colors.red),
@@ -310,7 +304,8 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
                   onPressed: _cancelAutoRenew,
                 ),
               TextButton.icon(
-                icon: const Icon(Icons.upgrade_rounded, color: darwcosGreen),
+                icon:
+                    const Icon(Icons.upgrade_rounded, color: darwcosGreen, size: 20),
                 label: const Text(
                   "Change / Renew Plan",
                   style: TextStyle(color: darwcosGreen),
@@ -337,19 +332,21 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
   }
 
   Widget _buildRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label,
-            style: const TextStyle(color: Colors.black54, fontSize: 14)),
-        Text(value,
-            style: const TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.w500)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(color: Colors.black54, fontSize: 14)),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.black87, fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 
-  // Payment History Card
   Widget _buildPaymentHistoryCard() {
     return Card(
       elevation: 4,
@@ -370,7 +367,6 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
     );
   }
 
-  // Available plans section
   Widget _buildAvailablePlansSection() {
     final currentPlanName =
         _sub?['plan_name']?.toString().toLowerCase() ?? "";
@@ -411,21 +407,20 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
     final duration = plan['duration_days']?.toString() ?? '0';
     final desc = plan['description'] ?? '';
 
-    // 🖼 Choose local image asset based on plan name
     String imageAsset = "";
     final lowerName = name.toString().toLowerCase();
 
     if (lowerName.contains("premium") || lowerName.contains("standard")) {
-      imageAsset = "assets/images/premium.png"; // Standard & Premium → premium.png
+      imageAsset = "assets/images/premium.png";
     } else if (lowerName.contains("eco")) {
-      imageAsset = "assets/images/eco_sub.png"; // Eco → eco_sub.png
+      imageAsset = "assets/images/eco_sub.png";
     } else if (lowerName.contains("basic")) {
-      imageAsset = "assets/images/basic.png"; // Basic → basic.png
+      imageAsset = "assets/images/basic.png";
     }
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 320),
-      margin: const EdgeInsets.only(right: 16),
+      margin: const EdgeInsets.only(right: 14),
       child: Card(
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -439,18 +434,19 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
                   borderRadius: BorderRadius.circular(12),
                   child: Image.asset(
                     imageAsset,
-                    width: 90,
-                    height: 90,
+                    width: 80,
+                    height: 80,
                     fit: BoxFit.cover,
                   ),
                 ),
-              if (imageAsset.isNotEmpty) const SizedBox(width: 14),
+              if (imageAsset.isNotEmpty) const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       name,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: darwcosGreen,
@@ -469,6 +465,8 @@ class _MySubscriptionScreenState extends State<MySubscriptionScreen> {
                     Text(
                       desc,
                       softWrap: true,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.black54, height: 1.3),
                     ),
                     const SizedBox(height: 10),

@@ -16,7 +16,6 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _addressController;
   late TextEditingController _weightController;
-  final TextEditingController _searchController = TextEditingController();
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -52,7 +51,6 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     _fetchDonationDrives();
   }
 
-  // ---------------- FETCH USER ADDRESS ----------------
   Future<void> _fetchUserProfile() async {
     if (widget.pickup != null) return;
     try {
@@ -66,49 +64,37 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
               'No Address Found';
         });
       } else {
-        setState(() {
-          _addressController.text = 'No Address Found';
-        });
+        _addressController.text = 'No Address Found';
       }
     } catch (e) {
-      debugPrint("❌ Failed to fetch user profile: $e");
-      setState(() {
-        _addressController.text = 'No Address Found';
-      });
+      _addressController.text = 'No Address Found';
     }
   }
 
-  // ---------------- FETCH REWARD POINTS ----------------
   Future<void> _fetchPoints() async {
     final pts = await ApiService.getUserPoints();
     if (!mounted) return;
     setState(() => _points = pts);
   }
 
-  // ---------------- FETCH DONATION DRIVES ----------------
   Future<void> _fetchDonationDrives() async {
     try {
       final drives = await ApiService.getDonationDrives();
-      debugPrint("✅ Donation drives response: $drives");
       setState(() {
-        _donationDrives = drives.map((d) {
-          return {
-            "id": int.tryParse(d["id"].toString()) ?? 0,
-            "title": d["title"] ?? d["name"] ?? "Untitled Drive",
-          };
-        }).toList();
+        _donationDrives = drives
+            .map((d) => {
+                  "id": int.tryParse(d["id"].toString()) ?? 0,
+                  "title": d["title"] ?? d["name"] ?? "Untitled Drive",
+                })
+            .toList();
         _loadingDrives = false;
       });
     } catch (e) {
-      debugPrint("⚠️ Failed to load donation drives: $e");
-      setState(() {
-        _donationDrives = [];
-        _loadingDrives = false;
-      });
+      _donationDrives = [];
+      _loadingDrives = false;
     }
   }
 
-  // ---------------- DATE/TIME PICKERS ----------------
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -121,123 +107,84 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
-    );
+    final picked =
+        await showTimePicker(context: context, initialTime: TimeOfDay.now());
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  // ---------------- CONFIRM PICKUP NOW ----------------
-  Future<bool> _confirmPickupNow() async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Confirm Pickup Now"),
-            content:
-                const Text("Would you like to schedule this pickup for right now?"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("Cancel"),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: darwcosGreen),
-                child: const Text("Yes, Proceed",
-                    style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-// ---------------- SUBMIT PICKUP ----------------
-Future<void> _submit() async {
-  if (!_formKey.currentState!.validate()) return;
-  if (_selectedDonationDriveId == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Please select a donation drive.")),
-    );
-    return;
-  }
-
-  DateTime scheduledDate;
-  if (_pickupOption == "schedule") {
-    if (_selectedDate == null || _selectedTime == null) {
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedDonationDriveId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text("Please select both date and time for your pickup.")),
+        const SnackBar(content: Text("Please select a donation drive.")),
       );
       return;
     }
-    scheduledDate = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedTime!.hour,
-      _selectedTime!.minute,
-    );
-  } else {
-    final confirmed = await _confirmPickupNow();
-    if (!confirmed) return;
-    scheduledDate = DateTime.now();
-  }
 
-  setState(() => _isLoading = true);
+    DateTime scheduledDate;
+    if (_pickupOption == "schedule") {
+      if (_selectedDate == null || _selectedTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("Please select both date and time for pickup.")));
+        return;
+      }
+      scheduledDate = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedTime!.hour,
+        _selectedTime!.minute,
+      );
+    } else {
+      scheduledDate = DateTime.now();
+    }
 
-  // ✅ Verify that the logged-in user is a restaurant employee (not driver)
-  final employeeProfile = await ApiService.getMyEmployeeProfile();
-  if (employeeProfile == null || employeeProfile['restaurant_name'] == null) {
+    setState(() => _isLoading = true);
+    final employeeProfile = await ApiService.getMyEmployeeProfile();
+
+    if (employeeProfile == null || employeeProfile['restaurant_name'] == null) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Only restaurant users can create pickups.")));
+      return;
+    }
+
+    final body = {
+      "scheduled_date": scheduledDate.toIso8601String(),
+      "weight_kg": double.parse(_weightController.text),
+      "pickup_address": _addressController.text,
+      "restaurant_name":
+          employeeProfile['restaurant_name'] ?? 'Unknown Restaurant',
+      "waste_type": _selectedWasteType,
+      "donation_drive": _selectedDonationDriveId,
+    };
+
+    dynamic result;
+    if (widget.pickup == null) {
+      final success = await ApiService.addTrashPickup(body);
+      result = success ? {} : null;
+    } else {
+      result = await ApiService.updateTrashPickup(widget.pickup!['id'], body);
+    }
+
     setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("⚠️ Only restaurant users can create pickups."),
-      ),
-    );
-    return;
-  }
 
-  final Map<String, dynamic> body = {
-    "scheduled_date": scheduledDate.toIso8601String(),
-    "weight_kg": double.parse(_weightController.text),
-    "pickup_address": _addressController.text,
-    "restaurant_name": employeeProfile['restaurant_name'] ?? 'Unknown Restaurant',
-    "waste_type": _selectedWasteType,
-    "donation_drive": _selectedDonationDriveId,
-  };
-
-  dynamic result;
-  if (widget.pickup == null) {
-    final success = await ApiService.addTrashPickup(body);
-    result = success ? {} : null;
-  } else {
-    result = await ApiService.updateTrashPickup(widget.pickup!['id'], body);
-  }
-
-  setState(() => _isLoading = false);
-
-  if (result != null) {
-    if (!mounted) return;
-    Navigator.pop(context, true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    if (result != null) {
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(widget.pickup == null
             ? "Pickup scheduled successfully!"
             : "Pickup updated successfully!"),
         backgroundColor: darwcosGreen,
-      ),
-    );
-  } else {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Failed to save pickup.")),
-    );
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to save pickup.")),
+      );
+    }
   }
-}
 
-  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     InputDecoration _fieldDecoration({
@@ -275,17 +222,17 @@ Future<void> _submit() async {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Card(
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              color: Colors.white,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -293,79 +240,91 @@ Future<void> _submit() async {
                         controller: _addressController,
                         readOnly: true,
                         decoration: _fieldDecoration(
-                            label: "Restaurant Address", icon: Icons.location_on),
+                            label: "Restaurant Address",
+                            icon: Icons.location_on),
                         validator: (v) =>
                             v == null || v.isEmpty ? "Address missing" : null,
                       ),
                       const SizedBox(height: 16),
-                      
                       TextFormField(
                         controller: _weightController,
-                        decoration: _fieldDecoration(label: "Weight (kg)", icon: Icons.scale),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: _fieldDecoration(
+                            label: "Weight (kg)", icon: Icons.scale),
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
                         inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}$')),
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,2}$')),
                         ],
                         validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return "Enter weight";
-                          }
+                          if (v == null || v.isEmpty) return "Enter weight";
                           final weight = double.tryParse(v);
-                          if (weight == null) {
-                            return "Please enter a valid number";
-                          }
-                          if (weight <= 0) {
-                            return "Weight must be greater than 0 kg";
-                          }
-                          if (weight > 50) {
-                            return "Weight cannot exceed 50 kg (limit for motorcycle pickups)";
-                          }
+                          if (weight == null) return "Invalid number";
+                          if (weight <= 0) return "Must be > 0 kg";
+                          if (weight > 50) return "Cannot exceed 50 kg";
                           return null;
                         },
                       ),
                       const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _selectedWasteType,
-                        items: _wasteTypes.entries
-                            .map((entry) => DropdownMenuItem(
-                                  value: entry.key,
-                                  child: Text(entry.value),
-                                ))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedWasteType = v),
-                        decoration: _fieldDecoration(
-                            label: "Type of Waste", icon: Icons.delete_outline),
-                        validator: (v) =>
-                            v == null ? "Select waste type" : null,
+                      SizedBox(
+                        width: double.infinity,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedWasteType,
+                          items: _wasteTypes.entries
+                              .map((entry) => DropdownMenuItem(
+                                    value: entry.key,
+                                    child: Text(entry.value,
+                                        overflow: TextOverflow.ellipsis),
+                                  ))
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => _selectedWasteType = v),
+                          decoration: _fieldDecoration(
+                              label: "Type of Waste",
+                              icon: Icons.delete_outline),
+                          validator: (v) =>
+                              v == null ? "Select waste type" : null,
+                        ),
                       ),
                       const SizedBox(height: 16),
-
                       _loadingDrives
-                          ? const Center(
-                              child:
-                                  CircularProgressIndicator(color: darwcosGreen))
-                          : DropdownButtonFormField<int>(
+                        ? const Center(child: CircularProgressIndicator(color: darwcosGreen))
+                        : IntrinsicWidth(
+                            child: DropdownButtonFormField<int>(
+                              isExpanded: true, // ✅ avoids text squeezing
                               value: _selectedDonationDriveId,
                               items: _donationDrives
                                   .map((drive) => DropdownMenuItem<int>(
                                         value: drive['id'],
-                                        child: Text(drive['title']),
+                                        child: Text(
+                                          drive['title'],
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ))
                                   .toList(),
-                              onChanged: (v) =>
-                                  setState(() => _selectedDonationDriveId = v),
-                              decoration: _fieldDecoration(
-                                  label: "Select Donation Drive",
-                                  icon: Icons.volunteer_activism),
-                              validator: (v) => v == null
-                                  ? "Please select a donation drive"
-                                  : null,
+                              onChanged: (v) => setState(() => _selectedDonationDriveId = v),
+                              decoration: InputDecoration(
+                                labelText: "Select Donation Drive",
+                                prefixIcon:
+                                    const Icon(Icons.volunteer_activism, color: darwcosGreen),
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14), // ✅ reduced padding
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              validator: (v) =>
+                                  v == null ? "Please select a donation drive" : null,
                             ),
+                          ),
                       const SizedBox(height: 24),
                       _isLoading
                           ? const Center(
-                              child:
-                                  CircularProgressIndicator(color: darwcosGreen))
+                              child: CircularProgressIndicator(
+                                  color: darwcosGreen))
                           : SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
@@ -377,7 +336,8 @@ Future<void> _submit() async {
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                icon: const Icon(Icons.save, color: Colors.white),
+                                icon: const Icon(Icons.save,
+                                    color: Colors.white),
                                 label: const Text(
                                   "Confirm Pickup",
                                   style: TextStyle(
@@ -392,8 +352,8 @@ Future<void> _submit() async {
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

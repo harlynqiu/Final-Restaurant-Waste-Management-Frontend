@@ -15,8 +15,8 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
   static const Color darwcosGreen = Color.fromARGB(255, 1, 87, 4);
   bool _isLoading = false;
 
-  // ---------------- CANCEL PICKUP ----------------
-  Future<void> _cancelPickup() async {
+  // ---------------- COMPLETE PICKUP ----------------
+  Future<void> _completePickup() async {
     final dynamic rawId = widget.pickup['id'];
     final int? id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
 
@@ -33,14 +33,14 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
-          "Confirm Cancellation",
+          "Mark as Complete",
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: darwcosGreen,
           ),
         ),
         content: const Text(
-          "Are you sure you want to cancel this pickup?\nThis action cannot be undone.",
+          "Are you sure you want to mark this pickup as completed?",
           style: TextStyle(fontSize: 15),
         ),
         actions: [
@@ -59,7 +59,7 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
               ),
             ),
             child: const Text(
-              "Yes, Cancel",
+              "Yes, Complete",
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -74,31 +74,41 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
 
     setState(() => _isLoading = true);
 
-    // ✅ Use the new cancelPickup() function
-    final ok = await ApiService.cancelPickup(id);
+    try {
+      final result = await ApiService.completePickupDetailed(id);
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
 
-    if (!ok) {
+      if (result["success"] == false) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed: ${result["message"]}"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("❌ Failed to cancel pickup. Please try again."),
+          content: Text("Pickup completed successfully!"),
+          backgroundColor: darwcosGreen,
+        ),
+      );
+
+      Navigator.pop(context, true); 
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error completing pickup: $e"),
           backgroundColor: Colors.redAccent,
         ),
       );
-      return;
     }
-
-    // ✅ Refresh the parent screen
-    Navigator.pop(context, {"refresh": true});
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("✅ Pickup cancelled successfully."),
-        backgroundColor: darwcosGreen,
-      ),
-    );
   }
 
   // ---------------- SAFE DATE FORMATTER ----------------
@@ -289,14 +299,15 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
                           ),
                           const SizedBox(height: 30),
 
-                          // ---------------- CANCEL BUTTON ----------------
-                          if (status == "PENDING" || status == "IN_PROGRESS")
+                          // ---------------- COMPLETE BUTTON ----------------
+                          if (status == "IN_PROGRESS")
                             Center(
                               child: ElevatedButton.icon(
-                                onPressed: _cancelPickup,
-                                icon: const Icon(Icons.cancel, color: Colors.white),
+                                onPressed: _completePickup,
+                                icon: const Icon(Icons.check_circle,
+                                    color: Colors.white),
                                 label: const Text(
-                                  "Cancel Pickup",
+                                  "Complete Pickup",
                                   style: TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold),

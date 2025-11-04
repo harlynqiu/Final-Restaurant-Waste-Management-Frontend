@@ -38,56 +38,63 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    final success = await ApiService.loginUser(username, password);
+    final result = await ApiService.loginUser(username, password);
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    // ❌ If login failed
-    if (!success) {
+    if (result["success"] == false) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Invalid username or password."),
+        SnackBar(
+          content: Text(result["message"] ?? "Invalid username or password."),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    // ✅ Login succeeded
     try {
-      final user = await ApiService.getCurrentUser();
-      final prefs = await SharedPreferences.getInstance();
-      final role = prefs.getString("role") ?? user["role"] ?? "owner";
+      final role = (result["role"] ?? "employee").toString().toLowerCase();
+      final verified = result["verified"] == true;
 
-      // ✅ Show success *before* navigation
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("✅ Login successful as $role!")),
+        SnackBar(
+          content: Text(" Login successful as $role!"),
+          backgroundColor: Colors.green,
+        ),
       );
 
-      // Short delay to allow snackbar to display properly
       await Future.delayed(const Duration(milliseconds: 600));
 
-      if (!mounted) return;
-
-      // Choose target screen
-      Widget targetScreen = role.toLowerCase() == "driver"
+      // Choose destination based on role
+      Widget targetScreen = role == "driver"
           ? const DriverDashboardScreen()
           : const DashboardScreen();
 
-      // Replace current route safely
+      // Only allow verified users to proceed
+      if (!verified) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(" Account pending approval. Please wait for verification."),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Navigate to correct dashboard
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => targetScreen),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("⚠️ Error fetching user info: $e")),
+        SnackBar(content: Text(" Error fetching user info: $e")),
       );
     }
-  }
+}
 
   // ---------------- UI ----------------
   @override
@@ -100,13 +107,11 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                // 🦅 App Logo
                 Image.asset(
                   "assets/images/black_philippine_eagle.png",
                   width: 120,
                 ),
                 const SizedBox(height: 10),
-
                 const Text(
                   "Welcome to D.A.R.W.C.O.S",
                   style: TextStyle(
@@ -122,8 +127,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(color: Colors.black54, fontSize: 13),
                 ),
                 const SizedBox(height: 30),
-
-                // 🗂 Login Form Card
                 Card(
                   elevation: 6,
                   shape: RoundedRectangleBorder(
@@ -144,8 +147,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Username Field
                         TextField(
                           controller: _usernameController,
                           decoration: const InputDecoration(
@@ -162,8 +163,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           cursorColor: darwcosGreen,
                         ),
                         const SizedBox(height: 16),
-
-                        // Password Field
                         TextField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
@@ -187,8 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           cursorColor: darwcosGreen,
                         ),
-
-                        // Forgot Password
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
@@ -205,8 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
-
-                        // Sign In Button
                         SizedBox(
                           height: 50,
                           child: _isLoading
@@ -230,8 +225,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Divider
                         Row(
                           children: const [
                             Expanded(child: Divider()),
@@ -243,8 +236,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-
-                        // Sign up Link
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -270,9 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 30),
-
                 const Text(
                   "Radiate Pride. Radiate Cleanliness.",
                   textAlign: TextAlign.center,

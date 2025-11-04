@@ -10,9 +10,9 @@ class EmployeeListScreen extends StatefulWidget {
 }
 
 class _EmployeeListScreenState extends State<EmployeeListScreen> {
-  // 🎨 Brand palette
-  static const Color darwcosGreen = Color(0xFF015704); // primary
-  static const Color deepRed = Color(0xFFB71C1C); // solid red
+  // Color palette
+  static const Color darwcosGreen = Color(0xFF015704);
+  static const Color deepRed = Color(0xFFB71C1C);
   static const Color softGreen = Color(0xFF2E7D32);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color bg = Color(0xFFF6F8F6);
@@ -44,7 +44,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = "❌ Failed to load employees: $e";
+        _error = "Failed to load employees: $e";
         _loading = false;
       });
     }
@@ -100,8 +100,8 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
           ),
         ),
         content: Text(
-          "Are you sure you want to delete ${emp['name']}?",
-          style: const TextStyle(color: textSecondary),
+          "Are you sure you want to delete this employee?",
+          style: TextStyle(color: textSecondary),
         ),
         actions: [
           TextButton(
@@ -135,8 +135,11 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       context,
       MaterialPageRoute(builder: (_) => const EmployeeFormScreen()),
     );
-    if (result == true) _loadEmployees();
-  }
+    if (result == true) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      _loadEmployees();
+    }
+  } // ← this brace was missing in your file
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +231,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     );
   }
 
-  // 🌿 Header Card
+  // Header card
   Widget _buildHeaderCard() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 20, 0, 10),
@@ -256,7 +259,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Meet Your Team 👥",
+                      "Meet Your Team",
                       style: TextStyle(
                         color: darwcosGreen,
                         fontSize: 18,
@@ -282,7 +285,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     );
   }
 
-  // 🔍 Search Bar
+  // Search bar
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 10),
@@ -314,7 +317,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     );
   }
 
-  // 🧑 No Employees Yet
+  // No employees view
   Widget _buildNoEmployeesView() {
     return Column(
       children: const [
@@ -332,7 +335,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     );
   }
 
-  // 🪪 Compact Employee Card (tappable → bottom sheet)
+  // Employee card
   Widget _buildEmployeeCard(Map<String, dynamic> emp, double width) {
     final String name = emp['name'] ?? "Unnamed";
     final String position = emp['position'] ?? "No position";
@@ -413,15 +416,14 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.keyboard_arrow_up_rounded,
-                color: textSecondary, size: 20),
+            const Icon(Icons.keyboard_arrow_up_rounded, color: textSecondary, size: 20),
           ],
         ),
       ),
     );
   }
 
-  // 📄 Bottom Sheet with Employee Info
+  // Employee details bottom sheet
   void _showEmployeeDetailsBottomSheet(Map<String, dynamic> emp) {
     final String name = emp['name'] ?? "Unnamed";
     final String position = emp['position'] ?? "No position";
@@ -439,8 +441,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -520,8 +521,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: darwcosGreen,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
@@ -534,7 +534,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     );
   }
 
-  // 🧾 Detail Row Helper
+  // Detail row helper
   Widget _detailRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -547,12 +547,14 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: const TextStyle(
-                      color: textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    )),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 Text(
                   value,
                   style: const TextStyle(

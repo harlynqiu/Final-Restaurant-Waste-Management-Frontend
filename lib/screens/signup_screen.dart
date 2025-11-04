@@ -35,7 +35,6 @@ class _SignupScreenState extends State<SignupScreen> {
     _initLocationOnce();
   }
 
-  /// Initialize location safely only once
   Future<void> _initLocationOnce() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -57,7 +56,6 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
 
-      // ✅ Use getCurrentPosition only once (no active stream)
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
@@ -70,7 +68,6 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  /// Reverse-geocode coordinates → address
   Future<void> _updateAddressFromLatLng(double lat, double lng) async {
     try {
       final url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng";
@@ -89,14 +86,26 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  /// Map picker modal
+  Future<List<dynamic>> _searchAddress(String query) async {
+    try {
+      final url = "https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=5";
+      final response = await http.get(Uri.parse(url), headers: {
+        "User-Agent": "DARWCOSApp/1.0 (support@darwcos.com)"
+      });
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      debugPrint("Search error: $e");
+    }
+    return [];
+  }
+
   Future<void> _openMapPicker() async {
     if (_selectedLocation == null) {
       await _initLocationOnce();
     }
-
-    LatLng tempLocation = _selectedLocation ?? LatLng(7.0731, 125.6128); // Default: Davao City
-
+    LatLng tempLocation = _selectedLocation ?? LatLng(7.0731, 125.6128); // Davao City default
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -148,7 +157,6 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-
                 Expanded(
                   child: FlutterMap(
                     mapController: _mapController,
@@ -213,23 +221,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Search address via OpenStreetMap
-  Future<List<dynamic>> _searchAddress(String query) async {
-    try {
-      final url = "https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=5";
-      final response = await http.get(Uri.parse(url), headers: {
-        "User-Agent": "DARWCOSApp/1.0 (support@darwcos.com)"
-      });
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
-    } catch (e) {
-      debugPrint("Search error: $e");
-    }
-    return [];
-  }
 
-  /// Register user
   Future<void> _register() async {
     if (_restaurantController.text.trim().isEmpty ||
         _addressController.text.trim().isEmpty) {
@@ -248,39 +240,46 @@ class _SignupScreenState extends State<SignupScreen> {
 
     setState(() => _isLoading = true);
 
-  final success = await ApiService.register(
-    username: _usernameController.text.trim(),
-    password: _passwordController.text.trim(),
-    email: _emailController.text.trim(),
-    name: _usernameController.text.trim(),
-    position: "Owner",
-    restaurantName: _restaurantController.text.trim(),
-    address: _addressController.text.trim(),
-    latitude: _selectedLocation!.latitude,
-    longitude: _selectedLocation!.longitude,
-  );
+    final result = await ApiService.signupUser(
+      username: _usernameController.text.trim(),
+      password: _passwordController.text.trim(),
+      email: _emailController.text.trim(),
+      name: _usernameController.text.trim(),
+      position: "Owner",
+      restaurantName: _restaurantController.text.trim(),
+      address: _addressController.text.trim(),
+      latitude: _selectedLocation!.latitude,
+      longitude: _selectedLocation!.longitude,
+    );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (success) {
+    if (result["success"]) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Registration successful! Please login.")),
+        SnackBar(content: Text(result["message"] ?? "Registration successful!")),
       );
+
+      if (result["requiresVerification"] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please verify your account before login.")),
+        );
+      }
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Registration failed.")),
+        SnackBar(content: Text(result["message"] ?? "Registration failed.")),
       );
     }
   }
 
   @override
   void dispose() {
-    _positionSub?.cancel(); // ✅ clean up (even though not actively used now)
+    _positionSub?.cancel();
     super.dispose();
   }
 
@@ -381,15 +380,24 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, IconData icon,
-      {bool obscure = false}) {
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    bool obscure = false,
+  }) {
     return TextField(
       controller: controller,
       obscureText: obscure,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: darwcosGreen),
-        border: const OutlineInputBorder(),
+        enabledBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: darwcosGreen),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: darwcosGreen, width: 2),
+        ),
       ),
     );
   }

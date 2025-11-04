@@ -34,8 +34,18 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
 
     try {
       final data = await ApiService.getAssignedPickups();
+
+      // ✅ Convert accepted pickups to in-progress automatically
+      for (final p in data) {
+        if (p['status'].toString().toUpperCase() == "ACCEPTED") {
+          await ApiService.startPickup(p['id']);
+        }
+      }
+
+      final refreshed = await ApiService.getAssignedPickups();
+
       setState(() {
-        _allPickups = data;
+        _allPickups = refreshed;
         _loading = false;
         _error = "";
       });
@@ -55,9 +65,8 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
       case "PENDING":
         return Colors.grey;
       case "ACCEPTED":
-        return Colors.orange;
       case "IN_PROGRESS":
-        return Colors.blue;
+        return Colors.orange;
       case "COMPLETED":
         return Colors.green;
       case "CANCELLED":
@@ -114,13 +123,17 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
       width: 260,
       margin: const EdgeInsets.only(right: 14),
       child: GestureDetector(
-        onTap: () {
-          Navigator.push(
+        onTap: () async {
+          // ✅ When tapping, open details (where “Complete” is available)
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => PickupDetailScreen(pickup: pickup),
             ),
           );
+          if (result == true) {
+            _loadPickups();
+          }
         },
         child: Card(
           color: Colors.white,
@@ -138,8 +151,8 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(14),
@@ -196,49 +209,17 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                   style: const TextStyle(fontSize: 13, color: Colors.black54),
                 ),
                 const SizedBox(height: 10),
-                if (status == "ACCEPTED")
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: () =>
-                          ApiService.startPickup(pickup['id']),
-                      icon: const Icon(Icons.play_arrow,
-                          color: Colors.white, size: 18),
-                      label: const Text(
-                        "Start",
-                        style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
+
+                // ✅ No more “Start” button; show info only
                 if (status == "IN_PROGRESS")
                   Align(
                     alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: () => ApiService.completePickupDetailed(
-                          pickup['id']),
-                      icon: const Icon(Icons.check_circle_outline,
-                          color: Colors.white, size: 18),
-                      label: const Text(
-                        "Complete",
-                        style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: darwcosGreen,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                    child: Text(
+                      "In Progress...",
+                      style: TextStyle(
+                        color: Colors.orange[800],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
                     ),
                   ),
@@ -262,7 +243,7 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
     );
   }
 
-  // ---------------- BUILD SECTION WITH IMAGE BESIDE TITLE ----------------
+  // ---------------- BUILD SECTION ----------------
   Widget _buildHorizontalSection(String title, List<dynamic> items,
       {String? imagePath}) {
     if (items.isEmpty) return const SizedBox.shrink();
@@ -332,10 +313,8 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
       );
     }
 
-    final accepted = _filterByStatus("ACCEPTED");
     final inProgress = _filterByStatus("IN_PROGRESS");
     final completed = _filterByStatus("COMPLETED");
-    final cancelled = _filterByStatus("CANCELLED");
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -359,12 +338,10 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
         color: darwcosGreen,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // SEARCH BAR
               TextField(
                 onChanged: (v) => setState(() => _searchQuery = v),
                 decoration: InputDecoration(
@@ -372,8 +349,8 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                   prefixIcon: const Icon(Icons.search, color: darwcosGreen),
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
                     borderSide: BorderSide.none,
@@ -382,23 +359,17 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
               ),
               const SizedBox(height: 24),
 
-              _buildHorizontalSection("Accepted", accepted),
               _buildHorizontalSection("In Progress", inProgress,
                   imagePath: "assets/images/in_progress.png"),
               _buildHorizontalSection("Completed", completed,
                   imagePath: "assets/images/complete.png"),
-              _buildHorizontalSection("Cancelled", cancelled,
-                  imagePath: "assets/images/error.png"),
 
-              if (accepted.isEmpty &&
-                  inProgress.isEmpty &&
-                  completed.isEmpty &&
-                  cancelled.isEmpty)
+              if (inProgress.isEmpty && completed.isEmpty)
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.only(top: 80),
                     child: Text(
-                      "No pickups found.",
+                      "No active pickups yet.",
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   ),
