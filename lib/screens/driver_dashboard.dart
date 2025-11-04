@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'available_pickups_screen.dart';
 import 'driver_pickups_screen.dart';
+import 'completed_pickups_screen.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -252,10 +253,17 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                     );
                   },
                 ),
-                _buildDashboardCard(
-                  icon: Icons.history_rounded,
-                  title: "Completed Pickups",
-                  subtitle: "History (coming soon)",
+                  _buildDashboardCard(
+                    icon: Icons.history_rounded,
+                    title: "Completed Pickups",
+                    subtitle: "View your pickup history",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const CompletedPickupsScreen()),
+                      );
+                    },
                 ),
                 _buildDashboardCard(
                   icon: Icons.settings,

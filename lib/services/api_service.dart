@@ -897,5 +897,51 @@ static Future<Map<String, dynamic>> completePickupDetailed(int id) async {
   }
 }
 
+// ✅ Update an existing employee
+static Future<void> updateEmployee(
+  int id, {
+  required String name,
+  required String email,
+  required String position,
+}) async {
+  final token = await _getAccessToken();
+  final response = await http.put(
+    Uri.parse('$baseUrl/employees/$id/'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+    body: jsonEncode({
+      'name': name,
+      'email': email,
+      'position': position,
+    }),
+  );
+
+  if (response.statusCode != 200) {
+    throw Exception('Failed to update employee — status: ${response.statusCode}');
+  }
+}
+
+// ✅ Delete an employee by ID
+static Future<void> deleteEmployee(int id) async {
+  final token = await _getAccessToken();
+  final uri = Uri.parse('$baseUrl/employees/$id/');
+
+  final response = await http.delete(
+    uri,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+  );
+
+  // DRF usually returns 204 No Content on successful delete (sometimes 200)
+  if (response.statusCode != 204 && response.statusCode != 200) {
+    throw Exception(
+      'Failed to delete employee (status: ${response.statusCode}) — ${response.body}',
+    );
+  }
+}
 
 }

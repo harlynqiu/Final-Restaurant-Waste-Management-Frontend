@@ -10,11 +10,21 @@ class EmployeeListScreen extends StatefulWidget {
 }
 
 class _EmployeeListScreenState extends State<EmployeeListScreen> {
+  // 🎨 Brand palette
+  static const Color darwcosGreen = Color(0xFF015704); // primary
+  static const Color deepRed = Color(0xFFB71C1C); // solid red
+  static const Color softGreen = Color(0xFF2E7D32);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color bg = Color(0xFFF6F8F6);
+  static const Color textPrimary = Color(0xFF1F2937);
+  static const Color textSecondary = Color(0xFF6B7280);
+  static const double cardRadius = 14;
+
   bool _loading = true;
   List<dynamic> _employees = [];
+  List<dynamic> _filteredEmployees = [];
   String _error = "";
-
-  static const Color darwcosGreen = Color(0xFF015704);
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -25,17 +35,99 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   Future<void> _loadEmployees() async {
     try {
       final data = await ApiService.getEmployees();
+      if (!mounted) return;
       setState(() {
         _employees = data;
+        _filteredEmployees = data;
         _loading = false;
-        _error = "";
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = "❌ Failed to load employees: $e";
         _loading = false;
       });
     }
+  }
+
+  void _filterEmployees(String query) {
+    final lowerQuery = query.toLowerCase();
+    setState(() {
+      _filteredEmployees = _employees.where((emp) {
+        final name = emp['name']?.toLowerCase() ?? '';
+        final position = emp['position']?.toLowerCase() ?? '';
+        final email = emp['email']?.toLowerCase() ?? '';
+        return name.contains(lowerQuery) ||
+            position.contains(lowerQuery) ||
+            email.contains(lowerQuery);
+      }).toList();
+    });
+  }
+
+  Future<void> _deleteEmployee(int id) async {
+    try {
+      await ApiService.deleteEmployee(id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Employee deleted successfully."),
+          backgroundColor: darwcosGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _loadEmployees();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Delete failed. Please try again."),
+          backgroundColor: deepRed,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _confirmDelete(Map<String, dynamic> emp) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          "Delete Employee",
+          style: TextStyle(
+            color: textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          "Are you sure you want to delete ${emp['name']}?",
+          style: const TextStyle(color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(color: textSecondary, fontWeight: FontWeight.w600),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: deepRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              elevation: 0,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteEmployee(emp['id']);
+            },
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _navigateToAddEmployee() async {
@@ -48,29 +140,29 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
-        iconTheme: const IconThemeData(color: darwcosGreen),
+        backgroundColor: surface,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: darwcosGreen),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           "Employee Directory",
           style: TextStyle(
             color: darwcosGreen,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
           ),
         ),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: "Refresh",
-            onPressed: _loadEmployees,
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: "Add New Employee",
+            icon: const Icon(Icons.add_circle_outline, color: darwcosGreen),
             onPressed: _navigateToAddEmployee,
           ),
         ],
@@ -78,201 +170,401 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: darwcosGreen))
           : _error.isNotEmpty
-              ? _buildErrorState()
-              : _employees.isEmpty
-                  ? _buildEmptyState()
-                  : RefreshIndicator(
-                      onRefresh: _loadEmployees,
-                      color: darwcosGreen,
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 20),
+              ? Center(child: Text(_error, style: const TextStyle(color: deepRed)))
+              : RefreshIndicator(
+                  color: darwcosGreen,
+                  onRefresh: _loadEmployees,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          
-                          const SizedBox(height: 20),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: _employees
-                                .map((emp) => _buildEmployeeTile(emp))
-                                .toList(),
+                          _buildHeaderCard(),
+                          _buildSearchBar(),
+                          const SizedBox(height: 10),
+                          if (_filteredEmployees.isEmpty)
+                            _buildNoEmployeesView()
+                          else
+                            Wrap(
+                              alignment: WrapAlignment.start,
+                              spacing: 16,
+                              runSpacing: 16,
+                              children: _filteredEmployees
+                                  .map((e) => _buildEmployeeCard(e, screenWidth * 0.38))
+                                  .toList(),
+                            ),
+                          const SizedBox(height: 36),
+                          const Center(
+                            child: Text(
+                              "D.A.R.W.C.O.S",
+                              style: TextStyle(
+                                color: darwcosGreen,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.4,
+                              ),
+                            ),
                           ),
+                          const SizedBox(height: 18),
                         ],
                       ),
                     ),
+                  ),
+                ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _navigateToAddEmployee,
         backgroundColor: darwcosGreen,
+        onPressed: _navigateToAddEmployee,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
           "Add Employee",
           style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
         ),
       ),
     );
   }
 
-  // 🧍 Interactive employee tile with hover and tap effects
-  Widget _buildEmployeeTile(Map<String, dynamic> emp) {
-    return _HoverableCard(
+  // 🌿 Header Card
+  Widget _buildHeaderCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 20, 0, 10),
+      child: Card(
+        color: surface,
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cardRadius)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  "assets/images/employee.png",
+                  height: 70,
+                  width: 70,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Meet Your Team 👥",
+                      style: TextStyle(
+                        color: darwcosGreen,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      "Manage and oversee your restaurant’s employees efficiently.",
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: textSecondary,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🔍 Search Bar
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 10),
+      child: TextField(
+        controller: _searchController,
+        onChanged: _filterEmployees,
+        style: const TextStyle(color: textPrimary),
+        decoration: InputDecoration(
+          prefixIcon: const Icon(Icons.search, color: darwcosGreen),
+          hintText: "Search by name, position, or email...",
+          hintStyle: const TextStyle(color: textSecondary),
+          filled: true,
+          fillColor: surface,
+          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(cardRadius),
+            borderSide: BorderSide(color: darwcosGreen.withOpacity(0.14)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(cardRadius),
+            borderSide: BorderSide(color: darwcosGreen.withOpacity(0.14)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(cardRadius),
+            borderSide: const BorderSide(color: darwcosGreen, width: 1.2),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🧑 No Employees Yet
+  Widget _buildNoEmployeesView() {
+    return Column(
+      children: const [
+        Icon(Icons.info_outline, color: textSecondary, size: 56),
+        SizedBox(height: 14),
+        Text(
+          "No employees found.",
+          style: TextStyle(
+            fontSize: 16,
+            color: textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 🪪 Compact Employee Card (tappable → bottom sheet)
+  Widget _buildEmployeeCard(Map<String, dynamic> emp, double width) {
+    final String name = emp['name'] ?? "Unnamed";
+    final String position = emp['position'] ?? "No position";
+    final String email = emp['email'] ?? "No email";
+
+    final String initials = name.isNotEmpty
+        ? name.trim().split(" ").map((e) => e[0]).take(2).join().toUpperCase()
+        : "??";
+
+    final Color avatarColor =
+        Colors.primaries[name.hashCode % Colors.primaries.length].withOpacity(0.2);
+
+    return GestureDetector(
+      onTap: () => _showEmployeeDetailsBottomSheet(emp),
       child: Container(
-        width: 420,
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        width: width,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: surface,
+          border: Border.all(color: darwcosGreen.withOpacity(0.10)),
+          borderRadius: BorderRadius.circular(cardRadius),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12.withOpacity(0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
             CircleAvatar(
-              radius: 26,
-              backgroundColor: darwcosGreen.withOpacity(0.15),
-              child: const Icon(Icons.person, color: darwcosGreen, size: 28),
+              radius: 22,
+              backgroundColor: avatarColor,
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: darwcosGreen,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    emp['name'] ?? "Unnamed Employee",
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.black87,
+                      color: darwcosGreen,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
-                    "${emp['position'] ?? 'No position'} • ${emp['email'] ?? 'No email'}",
+                    position,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 13,
+                      fontSize: 12.5,
+                      color: textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: textSecondary,
+                      fontSize: 11.5,
                     ),
                   ),
                 ],
               ),
             ),
+            const Icon(Icons.keyboard_arrow_up_rounded,
+                color: textSecondary, size: 20),
           ],
         ),
       ),
     );
   }
 
-  // 🌿 Empty state
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.people_alt_outlined,
-                size: 90, color: darwcosGreen.withOpacity(0.3)),
-            const SizedBox(height: 16),
-            const Text(
-              "No employees yet",
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: darwcosGreen),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Tap the Add button below to create your first employee record.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // 📄 Bottom Sheet with Employee Info
+  void _showEmployeeDetailsBottomSheet(Map<String, dynamic> emp) {
+    final String name = emp['name'] ?? "Unnamed";
+    final String position = emp['position'] ?? "No position";
+    final String email = emp['email'] ?? "No email";
+    final String restaurant = emp['restaurant_name'] ?? "Not assigned";
+    final String address = emp['address'] ?? "No address provided";
+    final String status = emp['status'] ?? "Active";
+    final String date = emp['created_at'] ?? "N/A";
 
-  // 🚨 Error state
-  Widget _buildErrorState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, color: Colors.red[400], size: 80),
-            const SizedBox(height: 16),
-            Text(
-              _error,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: darwcosGreen,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
               ),
-              onPressed: _loadEmployees,
-              icon: const Icon(Icons.refresh, color: Colors.white),
-              label: const Text(
-                "Retry",
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor:
+                        Colors.primaries[name.hashCode % Colors.primaries.length]
+                            .withOpacity(0.2),
+                    child: Text(
+                      name.isNotEmpty
+                          ? name.trim().split(" ").map((e) => e[0]).take(2).join().toUpperCase()
+                          : "??",
+                      style: const TextStyle(
+                        color: darwcosGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        color: darwcosGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              _detailRow(Icons.badge_outlined, "Position", position),
+              _detailRow(Icons.email_outlined, "Email", email),
+              _detailRow(Icons.store_mall_directory_outlined, "Restaurant", restaurant),
+              _detailRow(Icons.location_on_outlined, "Address", address),
+              _detailRow(Icons.calendar_today_outlined, "Date Added", date),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.verified_rounded, color: darwcosGreen, size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    "Status: ${status.toUpperCase()}",
+                    style: const TextStyle(
+                      color: darwcosGreen,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Center(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  label: const Text(
+                    "Close",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: darwcosGreen,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
-// 🌿 Hoverable Card widget for subtle interactive animation
-class _HoverableCard extends StatefulWidget {
-  final Widget child;
-  const _HoverableCard({required this.child});
-
-  @override
-  State<_HoverableCard> createState() => _HoverableCardState();
-}
-
-class _HoverableCardState extends State<_HoverableCard> {
-  bool _hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        transform: _hovering
-            ? (Matrix4.identity()..scale(1.02))
-            : Matrix4.identity(),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: _hovering
-                  ? Colors.black12.withOpacity(0.2)
-                  : Colors.black12.withOpacity(0.05),
-              blurRadius: _hovering ? 10 : 5,
-              offset: const Offset(0, 4),
+  // 🧾 Detail Row Helper
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                      color: textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    )),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.5,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: GestureDetector(
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Employee tapped!")),
-            );
-          },
-          child: widget.child,
-        ),
+          ),
+        ],
       ),
     );
   }

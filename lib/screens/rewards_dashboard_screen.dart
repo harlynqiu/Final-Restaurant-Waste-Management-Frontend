@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import 'reward_redemption_history_screen.dart';
-import 'reward_voucher_screen.dart';
 
 class RewardsDashboardScreen extends StatefulWidget {
   const RewardsDashboardScreen({super.key});
@@ -11,18 +9,17 @@ class RewardsDashboardScreen extends StatefulWidget {
 }
 
 class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
-    with TickerProviderStateMixin {
-  static const Color darwcosGreen = Color.fromARGB(255, 1, 87, 4);
+    with SingleTickerProviderStateMixin {
+  static const Color darwcosGreen = Color(0xFF015704);
 
   int _points = 0;
-  List<dynamic> _transactions = [];
-  List<Map<String, dynamic>> _myRewards = [];
-
   bool _loading = true;
   bool _loadingMyRewards = false;
+  bool _loadingVouchers = false;
 
-  late AnimationController _fadeController;
-  late Animation<double> _fadeIn;
+  List<Map<String, dynamic>> _myRewards = [];
+  List<dynamic> _vouchers = [];
+
   late AnimationController _glowController;
   late Animation<double> _glowAnimation;
   bool _isGlowing = false;
@@ -35,53 +32,68 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _fadeIn = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
     _glowController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
     _glowAnimation =
         Tween<double>(begin: 0.0, end: 15.0).animate(_glowController);
-    _loadRewards();
+    _fetchAllData();
   }
 
   @override
   void dispose() {
-    _fadeController.dispose();
     _glowController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadRewards() async {
-    try {
-      final pointsData = await ApiService.getRewardPoints();
-      final transactionsData = await ApiService.getRewardTransactions();
-      final rewardsData = await ApiService.getMyRewards();
+  Future<void> _fetchAllData() async {
+    await Future.wait([
+      _fetchPoints(),
+      _fetchVouchers(),
+      _fetchMyRewards(),
+    ]);
+  }
 
+  Future<void> _fetchPoints() async {
+    setState(() => _loading = true);
+    try {
+      final data = await ApiService.getRewardPoints();
+      final points = data['points'] ?? 0;
+      if (!mounted) return;
+      if (points > _points && !_isGlowing) _startGlowEffect();
+      _updateBadgeProgress(points);
       setState(() {
-        _points = pointsData['points'] ?? 0;
-        _transactions = transactionsData;
-        _myRewards = List<Map<String, dynamic>>.from(rewardsData ?? []);
+        _points = points;
         _loading = false;
       });
-
-      _updateBadgeProgress(_points);
-      _fadeController.forward();
-      _startGlowEffect();
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _fetchVouchers() async {
+    setState(() => _loadingVouchers = true);
+    try {
+      final data = await ApiService.getVouchers();
+      setState(() => _vouchers = data ?? []);
+    } catch (_) {}
+    setState(() => _loadingVouchers = false);
+  }
+
+  Future<void> _fetchMyRewards() async {
+    setState(() => _loadingMyRewards = true);
+    try {
+      final data = await ApiService.getMyRewards();
+      setState(() => _myRewards = List<Map<String, dynamic>>.from(data ?? []));
+    } catch (_) {}
+    setState(() => _loadingMyRewards = false);
   }
 
   void _startGlowEffect() async {
     setState(() => _isGlowing = true);
     await _glowController.repeat(reverse: true);
     await Future.delayed(const Duration(seconds: 4));
-    await _glowController.reverse();
     _glowController.stop();
     setState(() => _isGlowing = false);
   }
@@ -121,488 +133,333 @@ class _RewardsDashboardScreenState extends State<RewardsDashboardScreen>
     });
   }
 
-  Color _getTransactionColor(String type) =>
-      type == "redeem" ? Colors.redAccent : darwcosGreen;
-  IconData _getTransactionIcon(String type) =>
-      type == "redeem" ? Icons.remove_circle_outline : Icons.add_circle_outline;
+  Future<void> _redeemVoucher(int id, String name, int cost) async {
+    if (_points < cost) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("❌ Not enough points."),
+        backgroundColor: Colors.redAccent,
+      ));
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Confirm Redemption"),
+        content: Text("Redeem '$name' for $cost points?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: darwcosGreen),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Confirm"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final success = await ApiService.redeemVoucher(id);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("✅ Voucher redeemed successfully!"),
+          backgroundColor: darwcosGreen,
+        ));
+        await _fetchAllData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("❌ Redemption failed."),
+          backgroundColor: Colors.redAccent,
+        ));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: darwcosGreen))
-          : RefreshIndicator(
-              onRefresh: _loadRewards,
-              child: FadeTransition(
-                opacity: _fadeIn,
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    // 🏆 HEADER
-                    SliverAppBar(
-                      expandedHeight: 260,
-                      pinned: true,
-                      backgroundColor: darwcosGreen,
-                      elevation: 0,
-                      flexibleSpace: FlexibleSpaceBar(
-                        centerTitle: true,
-                        title: const Text(
-                          "Rewards Dashboard",
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        automaticallyImplyLeading: true,
+        title: const Text(
+          "Rewards",
+          style: TextStyle(
+            color: darwcosGreen,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: darwcosGreen),
+      ),
+      body: Stack(
+        children: [
+          Container(height: 180, width: double.infinity, color: darwcosGreen),
+          RefreshIndicator(
+            onRefresh: _fetchAllData,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              children: [
+                _buildPointsAndBadgeSection(),
+                const SizedBox(height: 30),
+                const Text(
+                  "Available Vouchers",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: darwcosGreen,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_loadingVouchers)
+                  const Center(child: CircularProgressIndicator())
+                else if (_vouchers.isEmpty)
+                  const Text("No vouchers available right now.")
+                else
+                  ..._vouchers.map((v) => _buildVoucherCard(v)).toList(),
+                const SizedBox(height: 30),
+                const Text(
+                  "My Rewards",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: darwcosGreen,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_loadingMyRewards)
+                  const Center(child: CircularProgressIndicator())
+                else if (_myRewards.isEmpty)
+                  const Center(
+                      child: Text("You haven’t redeemed any rewards yet."))
+                else
+                  ..._myRewards.map((r) => _buildMyRewardCard(r)).toList(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVoucherCard(dynamic voucher) {
+    final name = voucher['name'] ?? 'Voucher';
+    final description = voucher['description'] ?? '';
+    final points = voucher['points_required'] ?? 0;
+    final imageUrl = voucher['image'];
+    final id = voucher['id'];
+
+    return Card(
+      elevation: 3,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: imageUrl != null
+                  ? Image.network(
+                      imageUrl,
+                      height: 60,
+                      width: 60,
+                      fit: BoxFit.cover,
+                    )
+                  : const Icon(Icons.card_giftcard,
+                      color: darwcosGreen, size: 50),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(description,
+                      style:
+                          const TextStyle(color: Colors.black54, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Text("$points pts",
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: darwcosGreen)),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: darwcosGreen,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
+              onPressed: () => _redeemVoucher(id, name, points),
+              child: const Text("Redeem",
+                  style: TextStyle(color: Colors.white, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyRewardCard(Map<String, dynamic> reward) {
+    final voucher = reward['voucher'] ?? {};
+    final name = voucher['name'] ?? reward['item_name'] ?? 'Reward';
+    final status = reward['status'] ?? 'completed';
+    final points = reward['points_spent'] ?? voucher['points_required'] ?? 0;
+    final imageUrl = voucher['image'];
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        leading: imageUrl != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(imageUrl, width: 40, height: 40),
+              )
+            : const Icon(Icons.card_giftcard, color: darwcosGreen),
+        title: Text(name),
+        subtitle: Text("Status: $status"),
+        trailing: Text(
+          "$points pts",
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, color: darwcosGreen),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPointsAndBadgeSection() {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Card(
+              elevation: 6,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "My Points",
                           style: TextStyle(
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontSize: 18,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black26,
-                                offset: Offset(1, 1),
-                                blurRadius: 3,
-                              ),
-                            ],
+                            color: darwcosGreen,
                           ),
                         ),
-                        background: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // 🌈 Gradient Background
-                            Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF015704),
-                                    Color(0xFF037A09),
-                                    Color(0xFF04A012),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                            ),
-
-                            // 🎨 Decorative Wave Shape at Bottom
-                            Align(
-                              alignment: Alignment.bottomCenter,
-                              child: Container(
-                                height: 70,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(40),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            // 🏅 Icon + Points
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 800),
-                                      height: _isGlowing ? 120 : 110,
-                                      width: _isGlowing ? 120 : 110,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color:
-                                                Colors.white.withOpacity(0.3),
-                                            blurRadius:
-                                                _isGlowing ? 30 : 20,
-                                            spreadRadius:
-                                                _isGlowing ? 10 : 5,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.white.withOpacity(0.15),
-                                      ),
-                                      padding: const EdgeInsets.all(20),
-                                      child: const Icon(
-                                        Icons.emoji_events_rounded,
-                                        color: Colors.white,
-                                        size: 65,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  "$_points Points",
-                                  style: const TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black26,
-                                        offset: Offset(2, 2),
-                                        blurRadius: 4,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  "Earn rewards for every completed pickup",
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                        IconButton(
+                          onPressed: _fetchPoints,
+                          icon: const Icon(Icons.refresh, color: darwcosGreen),
                         ),
+                      ],
+                    ),
+                    Text(
+                      _loading ? "..." : "$_points pts",
+                      style: const TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        color: darwcosGreen,
                       ),
                     ),
-
-                    // 🎯 POINTS + BADGE SECTION
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: Card(
-                                  elevation: 6,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(20),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text("My Points",
-                                            style: TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                                color: darwcosGreen)),
-                                        const SizedBox(height: 10),
-                                        Text("$_points pts",
-                                            style: const TextStyle(
-                                                fontSize: 38,
-                                                fontWeight: FontWeight.bold,
-                                                color: darwcosGreen)),
-                                        const SizedBox(height: 10),
-                                        LinearProgressIndicator(
-                                          value: _progress,
-                                          backgroundColor: Colors.grey[200],
-                                          color: darwcosGreen,
-                                          minHeight: 6,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          _points >= 1000
-                                              ? "🏆 Max badge achieved!"
-                                              : "$_pointsToNext pts to $_nextBadge",
-                                          style: const TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.black54),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                flex: 1,
-                                child: AnimatedBuilder(
-                                  animation: _glowAnimation,
-                                  builder: (context, child) {
-                                    return Card(
-                                      elevation: 5,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(20),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(20),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Image.asset(
-                                              "assets/images/trash_badge1.png",
-                                              height: 60,
-                                              width: 60,
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Text(_currentBadge,
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                    fontSize: 14)),
-                                            const SizedBox(height: 6),
-                                            Text("Next: $_nextBadge",
-                                                style: const TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.black54)),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(
+                      value: _progress,
+                      backgroundColor: Colors.grey[200],
+                      color: darwcosGreen,
+                      minHeight: 6,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _points >= 1000
+                          ? "🏆 Max badge achieved!"
+                          : "$_pointsToNext pts to $_nextBadge",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
                       ),
                     ),
-
-                    // 🧾 HISTORY + REDEEM VOUCHERS BUTTONS
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const RewardRedemptionHistoryScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.history,
-                                    color: darwcosGreen),
-                                label: const Text(
-                                  "View History",
-                                  style: TextStyle(
-                                      color: darwcosGreen,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  side:
-                                      const BorderSide(color: darwcosGreen),
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 14, horizontal: 10),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const RewardVoucherScreen(),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.card_giftcard,
-                                    color: Colors.white),
-                                label: const Text(
-                                  "Redeem Vouchers",
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: darwcosGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 14, horizontal: 10),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // 🧾 TRANSACTION HISTORY
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 10),
-                        child: const Text(
-                          "Transaction History",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    _transactions.isEmpty
-                        ? const SliverToBoxAdapter(
-                            child: Padding(
-                              padding: EdgeInsets.all(30),
-                              child: Center(
-                                child: Text(
-                                  "No transactions yet.",
-                                  style: TextStyle(
-                                      fontSize: 16, color: Colors.black54),
-                                ),
-                              ),
-                            ),
-                          )
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, i) {
-                                final t = _transactions[i];
-                                final type =
-                                    t['transaction_type'] ?? 'earn';
-                                final color = _getTransactionColor(type);
-                                final icon = _getTransactionIcon(type);
-                                final prefix =
-                                    type == "redeem" ? "-" : "+";
-
-                                return Container(
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            Colors.grey.withOpacity(0.1),
-                                        blurRadius: 5,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor:
-                                          color.withOpacity(0.1),
-                                      child: Icon(icon, color: color),
-                                    ),
-                                    title: Text(
-                                      t['description'] ?? "Transaction",
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 15),
-                                    ),
-                                    subtitle: Text(
-                                        "Date: ${t['created_at'].toString().substring(0, 16)}"),
-                                    trailing: Text(
-                                      "$prefix${t['points']} pts",
-                                      style: TextStyle(
-                                          color: color,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16),
-                                    ),
-                                  ),
-                                );
-                              },
-                              childCount: _transactions.length,
-                            ),
-                          ),
-
-                    // 🎁 MY REWARDS SECTION
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 20),
-                        child: const Text(
-                          "My Rewards",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    _myRewards.isEmpty
-                        ? const SliverToBoxAdapter(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Center(
-                                child: Text(
-                                  "You haven’t redeemed any rewards yet.",
-                                  style: TextStyle(color: Colors.black54),
-                                ),
-                              ),
-                            ),
-                          )
-                        : SliverGrid(
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                              childAspectRatio: 1,
-                            ),
-                            delegate: SliverChildBuilderDelegate(
-                              (context, i) {
-                                final reward = _myRewards[i];
-                                return Card(
-                                  elevation: 3,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(14)),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(Icons.card_giftcard,
-                                            color: darwcosGreen, size: 40),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          reward["reward_name"] ?? "Reward",
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          "Type: ${reward["reward_type"] ?? "N/A"}",
-                                          style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.black54),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          "${reward["points"] ?? 0} pts",
-                                          style: const TextStyle(
-                                              color: darwcosGreen,
-                                              fontWeight:
-                                                  FontWeight.bold),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                              childCount: _myRewards.length,
-                            ),
-                          ),
                   ],
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 1,
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  decoration: BoxDecoration(
+                    boxShadow: _isGlowing
+                        ? [
+                            BoxShadow(
+                              color: darwcosGreen.withOpacity(0.4),
+                              blurRadius: _glowAnimation.value,
+                              spreadRadius: _glowAnimation.value / 3,
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Card(
+                    elevation: 5,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            "assets/images/trash_badge1.png",
+                            height: 60,
+                            width: 60,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            _currentBadge,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "Next: $_nextBadge",
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

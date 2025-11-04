@@ -1,34 +1,38 @@
-// lib/screens/available_pickups_screen.dart
+// lib/screens/completed_pickups_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 
-class AvailablePickupsScreen extends StatefulWidget {
-  const AvailablePickupsScreen({super.key});
+class CompletedPickupsScreen extends StatefulWidget {
+  const CompletedPickupsScreen({super.key});
 
   @override
-  State<AvailablePickupsScreen> createState() => _AvailablePickupsScreenState();
+  State<CompletedPickupsScreen> createState() =>
+      _CompletedPickupsScreenState();
 }
 
-class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
+class _CompletedPickupsScreenState extends State<CompletedPickupsScreen> {
   bool _loading = true;
   String _error = "";
-  List<dynamic> _availablePickups = [];
+  List<dynamic> _completedPickups = [];
 
   static const Color darwcosGreen = Color.fromARGB(255, 1, 87, 4);
 
   @override
   void initState() {
     super.initState();
-    _loadAvailablePickups();
+    _loadCompletedPickups();
   }
 
-  // ------------------------------ LOAD AVAILABLE PICKUPS ------------------------------
-  Future<void> _loadAvailablePickups() async {
+  // ------------------------------ LOAD COMPLETED PICKUPS ------------------------------
+  Future<void> _loadCompletedPickups() async {
     try {
-      final data = await ApiService.getAvailablePickups();
+      final data = await ApiService.getAssignedPickups();
       setState(() {
-        _availablePickups = data;
+        _completedPickups = data
+            .where((p) =>
+                (p['status'] ?? '').toString().toUpperCase() == 'COMPLETED')
+            .toList();
         _loading = false;
         _error = "";
       });
@@ -37,78 +41,6 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
         _error = "❌ Failed to load pickups: $e";
         _loading = false;
       });
-    }
-  }
-
-  // ------------------------------ ACCEPT PICKUP ------------------------------
-  Future<void> _acceptPickup(int pickupId, String address) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Accept Pickup?",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: darwcosGreen,
-          ),
-        ),
-        content: const Text(
-          "Do you want to accept this pickup? Once accepted, it will be assigned to you.",
-          style: TextStyle(fontSize: 15),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("No", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: darwcosGreen,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              "Yes, Accept",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Processing pickup acceptance...")),
-    );
-
-    try {
-      final success = await ApiService.acceptPickup(pickupId);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Pickup accepted successfully!")),
-        );
-        Navigator.pushReplacementNamed(
-          context,
-          '/pickup-map',
-          arguments: {'pickupId': pickupId, 'address': address},
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("❌ Failed to accept pickup.")),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("⚠️ Error: $e")));
     }
   }
 
@@ -141,7 +73,7 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
       return Scaffold(
         appBar: AppBar(
           title: const Text(
-            "Available Pickups",
+            "Completed Pickups",
             style: TextStyle(color: darwcosGreen),
           ),
           backgroundColor: Colors.white,
@@ -159,7 +91,7 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
         elevation: 2,
         iconTheme: const IconThemeData(color: darwcosGreen),
         title: const Text(
-          "Available Pickups",
+          "Completed Pickups",
           style: TextStyle(
             color: darwcosGreen,
             fontWeight: FontWeight.bold,
@@ -170,14 +102,14 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: darwcosGreen),
             tooltip: "Refresh",
-            onPressed: _loadAvailablePickups,
+            onPressed: _loadCompletedPickups,
           ),
         ],
       ),
-      body: _availablePickups.isEmpty
+      body: _completedPickups.isEmpty
           ? const Center(
               child: Text(
-                "No available pickups right now.",
+                "No completed pickups yet.",
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey,
@@ -185,17 +117,20 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              itemCount: _availablePickups.length,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              itemCount: _completedPickups.length,
               itemBuilder: (context, index) {
-                final pickup = _availablePickups[index];
+                final pickup = _completedPickups[index];
                 final restaurantName =
                     pickup['restaurant_name'] ?? "Unknown Restaurant";
-                final address = pickup['pickup_address'] ?? "No Address Provided";
+                final address =
+                    pickup['pickup_address'] ?? "No Address Provided";
                 final wasteType = pickup['waste_type'] ?? "N/A";
                 final weight = pickup['weight_kg']?.toString() ?? "0";
-                final scheduled =
-                    _formatDate(pickup['scheduled_date'] ?? pickup['created_at']);
+                final scheduled = _formatDate(
+                    pickup['scheduled_date'] ?? pickup['created_at']);
+                final points = pickup['reward_points'] ?? 0;
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 18),
@@ -219,20 +154,20 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: darwcosGreen.withOpacity(0.1),
+                                  color: Colors.green.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: const Text(
-                                  "AVAILABLE",
+                                  "COMPLETED",
                                   style: TextStyle(
-                                    color: darwcosGreen,
+                                    color: Colors.green,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
                               const Spacer(),
-                              const Icon(Icons.storefront,
-                                  color: darwcosGreen, size: 28),
+                              const Icon(Icons.check_circle_outline,
+                                  color: Colors.green, size: 28),
                             ],
                           ),
                           const SizedBox(height: 18),
@@ -250,7 +185,9 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                           Text(
                             address,
                             style: const TextStyle(
-                                fontSize: 15, color: Colors.black87, height: 1.3),
+                                fontSize: 15,
+                                color: Colors.black87,
+                                height: 1.3),
                           ),
                           const Divider(height: 30),
 
@@ -297,7 +234,7 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                                   color: darwcosGreen, size: 20),
                               const SizedBox(width: 8),
                               Text(
-                                "Scheduled: ",
+                                "Completed on: ",
                                 style: TextStyle(
                                   color: darwcosGreen.withOpacity(0.8),
                                   fontWeight: FontWeight.bold,
@@ -312,33 +249,26 @@ class _AvailablePickupsScreenState extends State<AvailablePickupsScreen> {
                               ),
                             ],
                           ),
-
-                          const SizedBox(height: 28),
-
-                          // ---------------- ACCEPT BUTTON ----------------
-                          Center(
-                            child: ElevatedButton.icon(
-                              onPressed: () =>
-                                  _acceptPickup(pickup['id'], address),
-                              icon: const Icon(Icons.check_circle_outline,
-                                  color: Colors.white),
-                              label: const Text(
-                                "Accept Pickup",
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.star,
+                                  color: Colors.amber, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                "Reward Points: ",
                                 style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: darwcosGreen,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 28, vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                                  color: darwcosGreen.withOpacity(0.8),
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
+                              Text("$points pts",
+                                  style: const TextStyle(
+                                      color: Colors.black87, fontSize: 15)),
+                            ],
                           ),
+
+                          const SizedBox(height: 10),
                         ],
                       ),
                     ),

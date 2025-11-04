@@ -62,6 +62,19 @@ flutter:
      - assets/images/davao_thermo_corp.png
      - assets/images/add_employee.png
      - assets/images/rewards.png
+     - assets/images/eco_sub.png
+     - assets/images/premium.png
+     - assets/images/basic.png
+     - assets/images/donation.png
+     - assets/images/kitchen_waste.png
+     - assets/images/customer_waste.png
+     - assets/images/plastic_waste.png
+     - assets/images/employee.png
+     - assets/images/complete.png
+     - assets/images/in_progress.png
+     - assets/images/error.png
+     - assets/images/driver.png
+
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

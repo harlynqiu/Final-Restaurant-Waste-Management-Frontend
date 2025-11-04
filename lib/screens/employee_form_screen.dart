@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
 class EmployeeFormScreen extends StatefulWidget {
-  const EmployeeFormScreen({super.key});
+  final Map<String, dynamic>? employee; // ✅ allows editing mode
+
+  const EmployeeFormScreen({super.key, this.employee});
 
   @override
   State<EmployeeFormScreen> createState() => _EmployeeFormScreenState();
@@ -17,29 +19,62 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
   bool _saving = false;
   static const Color darwcosGreen = Color(0xFF015704);
 
+  bool get isEditMode => widget.employee != null; // ✅ detects edit vs add mode
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEditMode) {
+      // ✅ Pre-fill form when editing
+      _name.text = widget.employee?['name'] ?? '';
+      _email.text = widget.employee?['email'] ?? '';
+      _position.text = widget.employee?['position'] ?? '';
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
     try {
-      await ApiService.addEmployee(
-        name: _name.text.trim(),
-        email: _email.text.trim(),
-        position: _position.text.trim(),
-      );
+      if (isEditMode) {
+        // ✅ Update existing employee
+        await ApiService.updateEmployee(
+          widget.employee!['id'],
+          name: _name.text.trim(),
+          email: _email.text.trim(),
+          position: _position.text.trim(),
+        );
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("✅ Employee added successfully!"),
-          backgroundColor: Colors.green,
-        ),
-      );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Employee updated successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // ✅ Add new employee
+        await ApiService.addEmployee(
+          name: _name.text.trim(),
+          email: _email.text.trim(),
+          position: _position.text.trim(),
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Employee added successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
       Navigator.pop(context, true);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("❌ Failed to add employee: $e"),
+          content: Text("❌ Failed to save employee: $e"),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -56,9 +91,8 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     }) {
       return InputDecoration(
         labelText: label,
-        prefixIcon: icon != null
-            ? Icon(icon, color: darwcosGreen.withOpacity(0.8))
-            : null,
+        prefixIcon:
+            icon != null ? Icon(icon, color: darwcosGreen.withOpacity(0.8)) : null,
         filled: true,
         fillColor: Colors.grey[100],
         border: OutlineInputBorder(
@@ -75,9 +109,9 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         backgroundColor: Colors.white,
         elevation: 2,
         iconTheme: const IconThemeData(color: darwcosGreen),
-        title: const Text(
-          "Add Employee",
-          style: TextStyle(
+        title: Text(
+          isEditMode ? "Edit Employee" : "Add Employee",
+          style: const TextStyle(
             color: darwcosGreen,
             fontWeight: FontWeight.bold,
             fontSize: 22,
@@ -88,7 +122,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500), // ✅ limits width
+            constraints: const BoxConstraints(maxWidth: 500),
             child: Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
@@ -102,15 +136,19 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // 🖼️ Add Employee Image
+                      // 🖼️ Header Image
                       Image.asset(
-                        "assets/images/add_employee.png",
+                        isEditMode
+                            ? "assets/images/edit_employee.png"
+                            : "assets/images/add_employee.png",
                         height: 80,
                       ),
                       const SizedBox(height: 12),
-                      const Text(
-                        "New Employee Details",
-                        style: TextStyle(
+                      Text(
+                        isEditMode
+                            ? "Update Employee Details"
+                            : "New Employee Details",
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: darwcosGreen,
                           fontSize: 20,
@@ -171,11 +209,17 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                icon: const Icon(Icons.person_add_alt_1,
-                                    color: Colors.white),
-                                label: const Text(
-                                  "Save Employee",
-                                  style: TextStyle(
+                                icon: Icon(
+                                  isEditMode
+                                      ? Icons.save_as
+                                      : Icons.person_add_alt_1,
+                                  color: Colors.white,
+                                ),
+                                label: Text(
+                                  isEditMode
+                                      ? "Save Changes"
+                                      : "Save Employee",
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                   ),
