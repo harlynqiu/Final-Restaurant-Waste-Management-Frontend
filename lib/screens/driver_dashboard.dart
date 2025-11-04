@@ -124,7 +124,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
               const SizedBox(height: 16),
               Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 8),
               Text(
@@ -181,7 +182,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                         Text(
                           _gpsActive ? "GPS Active 🛰️" : "GPS Inactive ⚠️",
                           style: TextStyle(
-                            color: _gpsActive ? Colors.green : Colors.redAccent,
+                            color:
+                                _gpsActive ? Colors.green : Colors.redAccent,
                           ),
                         ),
                       ],
@@ -191,34 +193,59 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
               ],
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 25),
 
             // Vehicle Info Card
             Card(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
               ),
-              elevation: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              elevation: 4,
+              shadowColor: darwcosGreen.withOpacity(0.3),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.white,
+                ),
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text(
-                      "Vehicle Information",
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset(
+                        "assets/images/driver.png",
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                      ),
                     ),
-                    const Divider(),
-                    Text("Type: $vehicle"),
-                    Text("License: $license"),
-                    Text("Status: ${status.toUpperCase()}"),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Vehicle Information",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _infoRow("🚗 Type:", vehicle),
+                          _infoRow("🪪 License:", license),
+                          _infoRow("📊 Status:", status.toUpperCase()),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
 
             // Dashboard Menu Grid
             GridView.count(
@@ -253,17 +280,17 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                     );
                   },
                 ),
-                  _buildDashboardCard(
-                    icon: Icons.history_rounded,
-                    title: "Completed Pickups",
-                    subtitle: "View your pickup history",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const CompletedPickupsScreen()),
-                      );
-                    },
+                _buildDashboardCard(
+                  icon: Icons.history_rounded,
+                  title: "Completed Pickups",
+                  subtitle: "View your pickup history",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const CompletedPickupsScreen()),
+                    );
+                  },
                 ),
                 _buildDashboardCard(
                   icon: Icons.settings,
@@ -286,6 +313,31 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black54),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -323,12 +375,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           if (index == 1) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const AvailablePickupsScreen()),
+              MaterialPageRoute(
+                  builder: (_) => const AvailablePickupsScreen()),
             );
           } else if (index == 2) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const DriverPickupsScreen()),
+              MaterialPageRoute(
+                  builder: (_) => const DriverPickupsScreen()),
             );
           }
         },
@@ -346,35 +400,159 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     );
   }
 
+  // 🌿 Clean White Sidebar
   Drawer _buildDrawer(String name, String status) {
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: darwcosGreen),
-            accountName: Text(
-              name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      backgroundColor: Colors.white,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Profile Header
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 38,
+                    backgroundImage:
+                        const AssetImage("assets/images/driver.png"),
+                    backgroundColor: Colors.grey[200],
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Status: ${status.toUpperCase()}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: status.toLowerCase() == "active"
+                                ? darwcosGreen
+                                : Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            accountEmail: Text("Status: ${status.toUpperCase()}"),
-            currentAccountPicture: const CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.local_shipping, color: darwcosGreen, size: 36),
+
+            const SizedBox(height: 12),
+
+            // Menu
+            Expanded(
+              child: ListView(
+                children: [
+                  _drawerItem(Icons.dashboard_outlined, "Dashboard",
+                      () => Navigator.pop(context)),
+                  _drawerItem(Icons.list_alt_rounded, "Available Pickups", () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const AvailablePickupsScreen()),
+                    );
+                  }),
+                  _drawerItem(Icons.local_shipping_outlined, "My Pickups", () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const DriverPickupsScreen()),
+                    );
+                  }),
+                  _drawerItem(Icons.history_rounded, "Completed Pickups", () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const CompletedPickupsScreen()),
+                    );
+                  }),
+                  _drawerItem(Icons.settings_outlined, "Settings (Soon)", () {}),
+                ],
+              ),
             ),
+
+            // Logout + Footer
+            const Divider(height: 1),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListTile(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                leading: const Icon(Icons.logout, color: Colors.redAccent),
+                title: const Text(
+                  "Logout",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.redAccent,
+                  ),
+                ),
+                onTap: _logout,
+              ),
+            ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  "D.A.R.W.C.O.S Driver",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[500],
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItem(IconData icon, String title, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        leading: Icon(icon, color: darwcosGreen, size: 24),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
           ),
-          ListTile(
-            leading: const Icon(Icons.dashboard),
-            title: const Text('Dashboard'),
-            onTap: () => Navigator.pop(context),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Logout'),
-            onTap: _logout,
-          ),
-        ],
+        ),
+        hoverColor: darwcosGreen.withOpacity(0.08),
+        onTap: onTap,
       ),
     );
   }
