@@ -5,17 +5,16 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // ======================================================
-  // 🔗 BASE URL (auto: Web→127.0.0.1, Android Emulator→10.0.2.2)
-  //   - You can change the web/lan values below if needed.
-  // ======================================================
+
+  //  BASE URL (auto: Web→127.0.0.1, Android Emulator→10.0.2.2)
+
   static const String _webBase = "http://127.0.0.1:8000/api/";
   static const String _androidEmulatorBase = "http://10.0.2.2:8000/api/";
   static String get baseUrl => kIsWeb ? _webBase : _androidEmulatorBase;
 
-  // ======================================================
-  // 🔐 TOKEN STORAGE
-  // ======================================================
+ 
+  // TOKEN STORAGE  -------------------------------------------------------
+
   static const _kAccess = 'access_token';
   static const _kRefresh = 'refresh_token';
 
@@ -45,9 +44,8 @@ class ApiService {
     await prefs.remove(_kRefresh);
   }
 
-  // ======================================================
-  // 🧰 HEADERS & AUTH RETRY
-  // ======================================================
+  // HEADERS & AUTH RETRY  ---------------------------------------------------
+
   static Future<Map<String, String>> _authHeaders() async {
     final token = await _getAccessToken();
     return {
@@ -56,10 +54,8 @@ class ApiService {
     };
   }
 
-  // Kept for compatibility (some screens call this directly)
   static Future<Map<String, String>> getAuthHeaders() => _authHeaders();
 
-  /// Wrap a request; if it returns 401, refresh token once and retry.
   static Future<http.Response> _withAuthRetry(
     Future<http.Response> Function() makeRequest,
   ) async {
@@ -73,14 +69,13 @@ class ApiService {
     return res;
   }
 
-  // ======================================================
-  // 🔄 REFRESH TOKEN
-  // ======================================================
+  // REFRESH TOKEN  ---------------------------------------------
+
   static Future<bool> refreshToken() async {
     try {
       final refresh = await _getRefreshToken();
       if (refresh == null) {
-        debugPrint("⚠️ No refresh token");
+        debugPrint(" No refresh token");
         return false;
       }
 
@@ -93,35 +88,31 @@ class ApiService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         await _setAccessToken(data['access']);
-        debugPrint("🔄 Token refreshed");
+        debugPrint(" Token refreshed");
         return true;
       } else {
-        debugPrint("❌ Refresh failed: ${res.body}");
+        debugPrint(" Refresh failed: ${res.body}");
         await _clearTokens();
         return false;
       }
     } catch (e) {
-      debugPrint("🔥 Refresh exception: $e");
+      debugPrint(" Refresh exception: $e");
       return false;
     }
   }
 
-  // ======================================================
-  // 👤 AUTH
-  // ======================================================
+  // AUTHENTICATION -----------------------------------------------------
+
   static Future<Map<String, dynamic>> loginUser(
     String identifier,
     String password,
   ) async {
     try {
-      // -------------------------------
-      // ✅ 1) Django custom login: email OR username
-      // -------------------------------
       final response = await http.post(
         Uri.parse('${baseUrl}accounts/login/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          "username": identifier,   // ✅ email or username
+          "username": identifier, 
           "password": password,
         }),
       );
@@ -132,11 +123,9 @@ class ApiService {
 
       final data = jsonDecode(response.body);
 
-      // ✅ Extract JWT tokens
       final access = data["access"];
       final refresh = data["refresh"];
 
-      // ✅ SAVE TOKENS
       await _setAccessToken(access);
       await _setRefreshToken(refresh);
 
@@ -147,9 +136,6 @@ class ApiService {
 
       final prefs = await SharedPreferences.getInstance();
 
-      // -------------------------------
-      // ✅ 2) CHECK IF USER IS DRIVER
-      // -------------------------------
       final driverRes = await http.get(
         Uri.parse('${baseUrl}drivers/me/'),
         headers: authHeader,
@@ -169,9 +155,6 @@ class ApiService {
         };
       }
 
-      // -------------------------------
-      // ✅ 3) CHECK IF USER IS OWNER
-      // -------------------------------
       final ownerRes = await http.get(
         Uri.parse('${baseUrl}accounts/me/'),
         headers: authHeader,
@@ -189,9 +172,6 @@ class ApiService {
         };
       }
 
-      // -------------------------------
-      // ✅ 4) FALLBACK OWNER
-      // -------------------------------
       await prefs.setString("role", "owner");
       await prefs.setBool("logged_in", true);
 
@@ -204,9 +184,8 @@ class ApiService {
 
   static Future<void> logout() async => _clearTokens();
 
-  // ======================================================
-  // 🧑‍🍳 OWNER REGISTRATION & PROFILE
-  // ======================================================
+  // OWNER REGISTRATION & PROFILE  ---------------------------------------------------
+
   static Future<Map<String, dynamic>> registerOwner({
     required String username,
     required String password,
@@ -280,9 +259,8 @@ class ApiService {
     return null;
   }
 
-  // ======================================================
-  // 🚗 DRIVERS
-  // ======================================================
+  // DRIVERS --------------------------------------------------------------------
+
   static Future<Map<String, dynamic>?> getCurrentDriver() async {
     final res = await _withAuthRetry(() async {
       return http.get(
@@ -294,7 +272,7 @@ class ApiService {
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      debugPrint("❌ getCurrentDriver: ${res.statusCode} ${res.body}");
+      debugPrint(" getCurrentDriver: ${res.statusCode} ${res.body}");
       return null;
     }
   }
@@ -324,21 +302,20 @@ class ApiService {
       });
 
       if (res.statusCode == 200) {
-        debugPrint("✅ Driver location updated");
+        debugPrint(" Driver location updated");
         return true;
       } else {
-        debugPrint("❌ update_location → ${res.statusCode}: ${res.body}");
+        debugPrint(" update_location → ${res.statusCode}: ${res.body}");
         return false;
       }
     } catch (e) {
-      debugPrint("🔥 update_location exception: $e");
+      debugPrint(" update_location exception: $e");
       return false;
     }
   }
 
-  // ======================================================
-  // 🧺 TRASH PICKUPS (Owner + Driver)
-  // ======================================================
+  //  TRASH PICKUPS  -------------------------------------------------
+
   static Future<List<dynamic>> getTrashPickups() async {
     try {
       final res = await _withAuthRetry(() async {
@@ -369,19 +346,18 @@ class ApiService {
       });
 
       if (res.statusCode == 201) {
-        debugPrint("✅ Trash pickup created");
+        debugPrint(" Trash pickup created");
         return true;
       } else {
-        debugPrint("❌ Create pickup → ${res.statusCode}: ${res.body}");
+        debugPrint(" Create pickup → ${res.statusCode}: ${res.body}");
         return false;
       }
     } catch (e) {
-      debugPrint("🔥 createTrashPickup: $e");
+      debugPrint(" createTrashPickup: $e");
       return false;
     }
   }
 
-  // Alias for older screens
   static Future<bool> addTrashPickup(Map<String, dynamic> data) =>
       createTrashPickup(data);
 
@@ -399,10 +375,10 @@ class ApiService {
       });
 
       if (res.statusCode == 200) return jsonDecode(res.body);
-      debugPrint("❌ Update #$id → ${res.statusCode}: ${res.body}");
+      debugPrint(" Update #$id → ${res.statusCode}: ${res.body}");
       return null;
     } catch (e) {
-      debugPrint("🔥 updateTrashPickup: $e");
+      debugPrint(" updateTrashPickup: $e");
       return null;
     }
   }
@@ -417,7 +393,6 @@ class ApiService {
     return res.statusCode == 200;
   }
 
-  // -------- Driver-focused helpers --------
   static Future<List<dynamic>> getAvailablePickups() async {
     final res = await _withAuthRetry(() async {
       return http.get(
@@ -429,7 +404,7 @@ class ApiService {
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      debugPrint("❌ available → ${res.statusCode} ${res.body}");
+      debugPrint(" available → ${res.statusCode} ${res.body}");
       throw Exception('Failed to load available pickups');
     }
   }
@@ -475,14 +450,13 @@ class ApiService {
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     } else {
-      debugPrint("❌ assigned → ${res.statusCode} ${res.body}");
+      debugPrint(" assigned → ${res.statusCode} ${res.body}");
       throw Exception('Failed to load assigned pickups');
     }
   }
 
-  // ======================================================
-  // 🏅 REWARDS
-  // ======================================================
+  // REWARDS ----------------------------------------------
+
   static Future<int> getUserPoints() async {
     try {
       final res = await _withAuthRetry(() async {
@@ -582,9 +556,8 @@ class ApiService {
     }
   }
 
-  // ======================================================
-  // 🎁 DONATIONS
-  // ======================================================
+  //  DONATIONS ------------------------------------------------------
+
   static Future<List<dynamic>> getDonationDrives() async {
     final res = await _withAuthRetry(() async {
       return http.get(
@@ -637,9 +610,8 @@ class ApiService {
     }
   }
 
-  // ======================================================
-  // 👥 EMPLOYEES (records only — no /employees/me/)
-  // ======================================================
+  // EMPLOYEES -----------------------------------------------------------------
+ 
   static Future<List<dynamic>> getEmployees() async {
     final res = await _withAuthRetry(() async {
       return http.get(
@@ -648,11 +620,10 @@ class ApiService {
       );
     });
     if (res.statusCode == 200) return jsonDecode(res.body);
-    debugPrint('❌ getEmployees: ${res.statusCode} ${res.body}');
+    debugPrint(' getEmployees: ${res.statusCode} ${res.body}');
     throw Exception('Failed to load employees');
   }
 
-  /// Create an employee record under the current owner’s restaurant.
   static Future<void> addEmployee({
     required String name,
     required String email,
@@ -721,9 +692,8 @@ class ApiService {
     }
   }
 
-  // ======================================================
-  // 💳 SUBSCRIPTIONS (Owner)
-  // ======================================================
+  // SUBSCRIPTIONS -------------------------------------------------------------
+
   static Future<List<dynamic>> getPlans() async {
     final res = await _withAuthRetry(() async {
       return http.get(
