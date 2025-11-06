@@ -1,5 +1,4 @@
 // lib/screens/driver_dashboard.dart
-
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,7 +31,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _validateRole();
+    _loadDriver();
+    _startLiveTracking();
   }
 
   @override
@@ -41,45 +41,9 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     super.dispose();
   }
 
-  // ======================================================
-  // ✅ STEP 1 — CHECK ROLE + TOKEN (FIXED)
-  // ======================================================
-  Future<void> _validateRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    final role = prefs.getString("role");
-    final token = prefs.getString("access_token");
-
-    debugPrint("CHECK ROLE: $role");
-    debugPrint("CHECK TOKEN: $token");
-
-    // ✅ FIX: Must have role = driver AND a valid token
-    if (role != "driver" || token == null || token.isEmpty) {
-      Future.delayed(Duration.zero, () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Session expired or invalid. Please log in again."),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
-      });
-
-      return;
-    }
-
-    // ✅ If everything is valid → proceed
-    _loadDriver();
-    _startLiveTracking();
-  }
-
-  // ======================================================
-  // ✅ LOAD DRIVER PROFILE
-  // ======================================================
+  // ----------------------------------------------------------
+  // ✅ Load Driver Profile
+  // ----------------------------------------------------------
   Future<void> _loadDriver() async {
     try {
       final data = await ApiService.getCurrentDriver();
@@ -98,28 +62,17 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     }
   }
 
-  // ======================================================
-  // ✅ LIVE GPS TRACKING
-  // ======================================================
+  // ----------------------------------------------------------
+  // ✅ Live GPS Tracking
+  // ----------------------------------------------------------
   Future<void> _startLiveTracking() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        await Geolocator.openLocationSettings();
-        return;
-      }
+      bool enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) return;
 
-      LocationPermission permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Location permission denied"),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-        return;
-      }
+      LocationPermission perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) return;
 
       setState(() => _gpsActive = true);
 
@@ -130,10 +83,10 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
         ),
       );
 
-      _positionStream!.listen((Position position) async {
+      _positionStream!.listen((Position pos) async {
         await ApiService.updateDriverLocation(
-          position.latitude,
-          position.longitude,
+          pos.latitude,
+          pos.longitude,
         );
       });
     } catch (e) {
@@ -141,11 +94,12 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     }
   }
 
-  // ======================================================
-  // ✅ LOGOUT
-  // ======================================================
+  // ----------------------------------------------------------
+  // ✅ Logout
+  // ----------------------------------------------------------
   Future<void> _logout() async {
     await ApiService.logout();
+
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -154,10 +108,13 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     );
   }
 
-  // ======================================================
-  // ✅ SIDEBAR
-  // ======================================================
+  // ----------------------------------------------------------
+  // ✅ Sidebar Drawer (Original Aesthetic)
+  // ----------------------------------------------------------
   Widget _buildSidebar() {
+    final driverName = _driver?["full_name"] ?? "Driver";
+    final vehicle = _driver?["vehicle_type"] ?? "-";
+
     return Drawer(
       backgroundColor: Colors.white,
       child: SafeArea(
@@ -173,24 +130,23 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                       height: 60),
                   const SizedBox(height: 12),
                   Text(
-                    _driver?["full_name"] ?? "Driver",
+                    driverName,
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    _driver?["vehicle_type"] ?? "",
-                    style:
-                        const TextStyle(color: Colors.white70, fontSize: 14),
+                    vehicle,
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
               ),
             ),
 
             ListTile(
-              leading: const Icon(Icons.list_alt_rounded, color: darwcosGreen),
+              leading:
+                  const Icon(Icons.list_alt_rounded, color: darwcosGreen),
               title: const Text("Available Pickups"),
               onTap: () {
                 Navigator.push(
@@ -227,8 +183,8 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
 
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.logout_rounded,
-                  color: Colors.redAccent),
+              leading:
+                  const Icon(Icons.logout_rounded, color: Colors.redAccent),
               title: const Text("Logout"),
               onTap: _logout,
             ),
@@ -238,9 +194,9 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     );
   }
 
-  // ======================================================
-  // ✅ REUSABLE CARD
-  // ======================================================
+  // ----------------------------------------------------------
+  // ✅ Dashboard Card Widget (Original UI)
+  // ----------------------------------------------------------
   Widget _buildDashboardCard({
     required IconData icon,
     required String title,
@@ -274,16 +230,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             Text(
               title,
               style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-                height: 1.2,
-              ),
+                  fontWeight: FontWeight.bold, fontSize: 15),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(color: Colors.black54, fontSize: 12),
+              style: const TextStyle(
+                  color: Colors.black54, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ],
@@ -292,23 +246,44 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
     );
   }
 
-  // ======================================================
-  // ✅ MAIN DASHBOARD CONTENT
-  // ======================================================
-  Widget _buildMainDashboard() {
+  // ----------------------------------------------------------
+  // ✅ FULL ORIGINAL BEAUTIFUL DASHBOARD UI
+  // ----------------------------------------------------------
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: darwcosGreen,
+          title: const Text("Driver Dashboard"),
+        ),
+        body: Center(child: Text(_error)),
+      );
+    }
+
     final driverName = _driver?["full_name"] ?? "Driver";
     final status = _driver?["status"] ?? "inactive";
     final vehicle = _driver?["vehicle_type"] ?? "-";
     final license = _driver?["license_number"] ?? "-";
 
-    return RefreshIndicator(
-      onRefresh: _loadDriver,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: Colors.grey[100],
+      drawer: _buildSidebar(),
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ------------------------------------------------------
+            // ✅ Header with Eagle Icon
+            // ------------------------------------------------------
             Row(
               children: [
                 GestureDetector(
@@ -334,8 +309,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
                       Text(
                         _gpsActive ? "GPS Active 🛰️" : "GPS Inactive ⚠️",
                         style: TextStyle(
-                          color:
-                              _gpsActive ? Colors.green : Colors.redAccent,
+                          color: _gpsActive ? Colors.green : Colors.redAccent,
                           fontSize: 13,
                         ),
                       ),
@@ -347,35 +321,32 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
 
             const SizedBox(height: 20),
 
+            // ------------------------------------------------------
+            // ✅ Vehicle Info Card
+            // ------------------------------------------------------
             Card(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
+                  borderRadius: BorderRadius.circular(18)),
               elevation: 4,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Image.asset(
-                      "assets/images/driver.png",
-                      width: 80,
-                      height: 80,
-                    ),
+                    Image.asset("assets/images/driver.png",
+                        width: 80, height: 80),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Vehicle Information",
-                            style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold),
-                          ),
+                          const Text("Vehicle Information",
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold)),
                           const SizedBox(height: 6),
-                          _infoRow("Type", vehicle),
-                          _infoRow("License", license),
-                          _infoRow("Status", status.toUpperCase()),
+                          Text("Type: $vehicle"),
+                          Text("License: $license"),
+                          Text("Status: ${status.toString().toUpperCase()}"),
                         ],
                       ),
                     ),
@@ -386,6 +357,9 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
 
             const SizedBox(height: 25),
 
+            // ------------------------------------------------------
+            // ✅ Grid Menu
+            // ------------------------------------------------------
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -433,7 +407,7 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
             ),
 
             const SizedBox(height: 35),
-            Center(
+            const Center(
               child: Text(
                 "D.A.R.W.C.O.S – Driver Mode",
                 style: TextStyle(
@@ -446,56 +420,6 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Text(
-            "$label: ",
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.black54),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_error.isNotEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          backgroundColor: darwcosGreen,
-          title: const Text("Driver Dashboard"),
-        ),
-        body: Center(child: Text(_error)),
-      );
-    }
-
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: Colors.grey[100],
-      drawer: _buildSidebar(),
-      body: _buildMainDashboard(),
     );
   }
 }

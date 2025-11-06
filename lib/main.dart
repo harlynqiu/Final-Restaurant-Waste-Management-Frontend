@@ -10,6 +10,7 @@ import 'screens/driver_dashboard.dart';
 import 'screens/available_pickups_screen.dart';
 import 'screens/pickup_map_screen.dart';
 
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -38,20 +39,26 @@ class MyApp extends StatelessWidget {
         ),
       ),
 
-      // ✅ NEW: auto-route using role
+      // ✅ AUTO ROUTING BASED ON ROLE
       home: const RoleRouter(),
 
+      // ✅ ROUTES — FIXED (NO MORE const DRIVER DASHBOARD)
       routes: {
         '/login': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),
-        '/driver-dashboard': (context) => const DriverDashboardScreen(),
-        '/available-pickups': (context) => const AvailablePickupsScreen(),
+
+        // ❌ removed const
+        '/driver-dashboard': (context) => DriverDashboardScreen(),
+
+        // ❌ removed const
+        '/available-pickups': (context) => AvailablePickupsScreen(),
       },
 
       onGenerateRoute: (settings) {
         if (settings.name == '/pickup-map') {
-          final args =
-              settings.arguments as Map<String, dynamic>? ?? <String, dynamic>{};
+          final args = settings.arguments as Map<String, dynamic>? ??
+              <String, dynamic>{};
+
           return MaterialPageRoute(
             builder: (context) => PickupMapScreen(
               pickupId: args['pickupId'] ?? 0,
@@ -60,6 +67,7 @@ class MyApp extends StatelessWidget {
           );
         }
 
+        // ✅ fallback page
         return MaterialPageRoute(
           builder: (context) => const Scaffold(
             body: Center(
@@ -111,14 +119,15 @@ class _RoleRouterState extends State<RoleRouter> {
     }
 
     if (role == "driver") {
+      // ❌ removed const
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const DriverDashboardScreen()),
+        MaterialPageRoute(builder: (_) => DriverDashboardScreen()),
       );
       return;
     }
 
-    // default → owner
+    // ✅ owner dashboard remains const
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const DashboardScreen()),

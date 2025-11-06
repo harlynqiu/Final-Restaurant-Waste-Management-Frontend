@@ -48,103 +48,80 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
     }
   }
 
-  // ✅ Status color
-  Color _statusColor(String s) {
-    switch (s.toUpperCase()) {
-      case "IN_PROGRESS":
-        return Colors.orange;
-      case "COMPLETED":
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  // ✅ Complete pickup
-  Future<void> _completePickup(int id) async {
-    try {
-      final ok = await ApiService.completePickup(id);
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Pickup Completed!"),
-            backgroundColor: darwcosGreen,
-          ),
-        );
-        _loadPickups();
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
-      );
-    }
-  }
-
-  // ✅ Build card
+  // ✅ Build driver card (clickable)
   Widget _pickupCard(Map<String, dynamic> p) {
     final id = p["id"];
-    final status = p["status"].toString().toUpperCase();
-    final color = _statusColor(status);
+    final statusRaw = p["status"].toString().toUpperCase();
 
     final address = p["pickup_address"] ?? "No Address";
-    final wType = p["waste_type"] ?? "-";
-    final weight = p["weight_kg"]?.toString() ?? "0";
+    final wasteType = p["waste_type"] ?? "-";
+    final weight = p["weight_kg"].toString();
     final date = _formatDate(p["scheduled_date"] ?? p["created_at"]);
+
+    // ✅ Driver always sees "IN PROGRESS" unless completed
+    Color badgeColor;
+    String badgeText;
+
+    if (statusRaw == "COMPLETED") {
+      badgeColor = Colors.green;
+      badgeText = "COMPLETED";
+    } else {
+      badgeColor = Colors.orange;
+      badgeText = "IN PROGRESS";
+    }
 
     return Container(
       width: 260,
       margin: const EdgeInsets.only(right: 14),
-      child: Card(
-        elevation: 3,
-        color: Colors.white,
-        shadowColor: darwcosGreen.withOpacity(0.12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PickupDetailScreen(pickup: p),
-              ),
-            );
-            if (result is Map && result['refresh'] == true) {
-              _loadPickups();
-            }
-          },
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () async {
+          // ✅ Open detail screen
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PickupDetailScreen(pickup: p),
+            ),
+          );
+
+          // ✅ If detail screen completes → refresh list
+          if (result is Map && result['refresh'] == true) {
+            _loadPickups();
+          }
+        },
+        child: Card(
+          elevation: 4,
+          color: Colors.white,
+          shadowColor: darwcosGreen.withOpacity(0.15),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Status pill
-                Row(
-                  children: [
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
+                // ✅ Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: TextStyle(
+                      color: badgeColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
                     ),
-                    const Spacer(),
-                    const Icon(Icons.map, color: darwcosGreen, size: 20),
-                  ],
+                  ),
                 ),
+
                 const SizedBox(height: 10),
 
-                // Address
+                // ✅ Address
                 Text(
                   address,
                   style: const TextStyle(
@@ -155,11 +132,12 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 6),
 
-                // Waste & Weight
+                const SizedBox(height: 8),
+
+                // ✅ Waste + Weight
                 Text(
-                  "🗑 $wType   •   ⚖ $weight kg",
+                  "🗑 $wasteType   •   ⚖ $weight kg",
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.black87,
@@ -167,7 +145,7 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                 ),
                 const SizedBox(height: 4),
 
-                // Date
+                // ✅ Date
                 Text(
                   "📅 $date",
                   style: const TextStyle(
@@ -175,31 +153,6 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                     color: Colors.black54,
                   ),
                 ),
-                const SizedBox(height: 10),
-
-                if (status == "IN_PROGRESS")
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton(
-                      onPressed: () => _completePickup(id),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: darwcosGreen,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        "Complete",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -208,51 +161,55 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
     );
   }
 
-  // ✅ Build horizontal list section
+  // ✅ Build horizontal section
   Widget _section(String title, List<dynamic> items, String icon) {
     if (items.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Image.asset(icon, width: 32, height: 32),
-              const SizedBox(width: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: darwcosGreen,
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Image.asset(icon, width: 30),
+            const SizedBox(width: 10),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: darwcosGreen,
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          SizedBox(
-            height: 240,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: items.length,
-              itemBuilder: (ctx, index) => _pickupCard(items[index]),
             ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        SizedBox(
+          height: 260,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            itemBuilder: (ctx, i) => _pickupCard(items[i]),
           ),
-        ],
-      ),
+        ),
+
+        const SizedBox(height: 30),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final inProgress = _pickups.where((p) =>
-        p["status"].toString().toUpperCase() == "IN_PROGRESS").toList();
+    final inProgress = _pickups
+        .where((p) =>
+            p["status"].toString().toUpperCase() == "IN_PROGRESS" ||
+            p["status"].toString().toUpperCase() == "ACCEPTED")
+        .toList();
 
-    final completed = _pickups.where((p) =>
-        p["status"].toString().toUpperCase() == "COMPLETED").toList();
+    final completed = _pickups
+        .where((p) =>
+            p["status"].toString().toUpperCase() == "COMPLETED")
+        .toList();
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -298,8 +255,8 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
                           padding: EdgeInsets.only(top: 80),
                           child: Text(
                             "No assigned pickups yet.",
-                            style:
-                                TextStyle(color: Colors.grey, fontSize: 16),
+                            style: TextStyle(
+                                color: Colors.grey, fontSize: 16),
                           ),
                         ),
                       ),

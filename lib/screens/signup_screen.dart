@@ -105,6 +105,7 @@ class _SignupScreenState extends State<SignupScreen> {
     if (_selectedLocation == null) {
       await _initLocationOnce();
     }
+
     LatLng tempLocation = _selectedLocation ?? LatLng(7.0731, 125.6128);
 
     await showModalBottomSheet(
@@ -112,28 +113,32 @@ class _SignupScreenState extends State<SignupScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (_) {
-        TextEditingController searchCtrl =
-            TextEditingController(text: _addressController.text);
+        TextEditingController searchCtrl = TextEditingController();
+        List<dynamic> searchResults = [];
 
         return StatefulBuilder(
           builder: (context, setModalState) => SafeArea(
             child: Column(
               children: [
+                // --- sheet handle bar ---
                 Container(
-                  width: 50,
+                  width: 40,
                   height: 5,
-                  margin: const EdgeInsets.only(top: 8),
+                  margin: const EdgeInsets.only(top: 10),
                   decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                const SizedBox(height: 10),
+
+                const SizedBox(height: 12),
+
+                // --- search bar ---
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
                     controller: searchCtrl,
                     decoration: InputDecoration(
@@ -143,72 +148,119 @@ class _SignupScreenState extends State<SignupScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onSubmitted: (query) async {
-                      if (query.trim().isEmpty) return;
-                      final results = await _searchAddress(query.trim());
-                      if (results.isNotEmpty) {
-                        final first = results.first;
-                        tempLocation = LatLng(
-                          double.parse(first['lat']),
-                          double.parse(first['lon']),
-                        );
-                        _mapController.move(tempLocation, 16);
-                        setModalState(() {});
+                    onChanged: (query) async {
+                      if (query.trim().length < 3) {
+                        setModalState(() => searchResults = []);
+                        return;
                       }
+
+                      searchResults = await _searchAddress(query.trim());
+                      setModalState(() {});
                     },
                   ),
                 ),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: tempLocation,
-                      initialZoom: 16,
-                      onTap: (tapPosition, point) {
-                        setModalState(() {
-                          tempLocation = point;
-                        });
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+
+                // --- LIVE SEARCH LIST ---
+                if (searchResults.isNotEmpty)
+                  Expanded(
+                    flex: 0,
+                    child: Container(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      child: ListView.builder(
+                        itemCount: searchResults.length,
+                        itemBuilder: (context, i) {
+                          final item = searchResults[i];
+                          return ListTile(
+                            title: Text(item["display_name"]),
+                            onTap: () {
+                              tempLocation = LatLng(
+                                double.parse(item["lat"]),
+                                double.parse(item["lon"]),
+                              );
+                              _mapController.move(tempLocation, 16);
+                              setModalState(() => searchResults = []);
+                              searchCtrl.text = item["display_name"];
+                            },
+                          );
+                        },
                       ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: tempLocation,
-                            width: 60,
-                            height: 60,
-                            alignment: Alignment.topCenter,
-                            child: const Icon(
-                              Icons.location_pin,
-                              color: darwcosGreen,
-                              size: 45,
-                            ),
+                    ),
+                  ),
+
+                // --- MAP ---
+                Expanded(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: tempLocation,
+                          initialZoom: 16,
+                          onPositionChanged: (pos, _) {
+                            if (pos.center != null) {
+                              tempLocation = pos.center!;
+                              setModalState(() {});
+                            }
+                          },
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                           ),
                         ],
+                      ),
+
+                      // ✅ Center Pin
+                      const Icon(Icons.location_pin,
+                          color: darwcosGreen, size: 48),
+
+                      // ✅ Floating Button — use my location
+                      Positioned(
+                        right: 16,
+                        bottom: 20,
+                        child: FloatingActionButton(
+                          backgroundColor: darwcosGreen,
+                          mini: true,
+                          child: const Icon(Icons.my_location, color: Colors.white),
+                          onPressed: () async {
+                            final pos = await Geolocator.getCurrentPosition();
+                            tempLocation = LatLng(pos.latitude, pos.longitude);
+                            _mapController.move(tempLocation, 17);
+                            setModalState(() {});
+                          },
+                        ),
                       ),
                     ],
                   ),
                 ),
+
+                // --- CONFIRM BUTTON ---
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.check_circle_outline),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: darwcosGreen,
-                      minimumSize: const Size.fromHeight(48),
+                      minimumSize: const Size.fromHeight(50),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(context);
-                      setState(() => _selectedLocation = tempLocation);
-                      _updateAddressFromLatLng(
-                          tempLocation.latitude, tempLocation.longitude);
+
+                      setState(() {
+                        _selectedLocation = tempLocation;
+                        _addressController.text = "Loading address...";
+                      });
+
+                      await _updateAddressFromLatLng(
+                        tempLocation.latitude,
+                        tempLocation.longitude,
+                      );
                     },
                     label: const Text(
                       "Confirm Location",

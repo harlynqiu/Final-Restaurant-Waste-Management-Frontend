@@ -9,8 +9,8 @@ class ApiService {
   // 🔗 BASE URL (auto: Web→127.0.0.1, Android Emulator→10.0.2.2)
   //   - You can change the web/lan values below if needed.
   // ======================================================
-  static const String _webBase = "http://127.0.0.1:8000/api";
-  static const String _androidEmulatorBase = "http://10.0.2.2:8000/api";
+  static const String _webBase = "http://127.0.0.1:8000/api/";
+  static const String _androidEmulatorBase = "http://10.0.2.2:8000/api/";
   static String get baseUrl => kIsWeb ? _webBase : _androidEmulatorBase;
 
   // ======================================================
@@ -85,7 +85,7 @@ class ApiService {
       }
 
       final res = await http.post(
-        Uri.parse('$baseUrl/token/refresh/'),
+        Uri.parse('${baseUrl}token/refresh/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'refresh': refresh}),
       );
@@ -110,27 +110,33 @@ class ApiService {
   // 👤 AUTH
   // ======================================================
   static Future<Map<String, dynamic>> loginUser(
-    String username,
+    String identifier,
     String password,
   ) async {
     try {
       // -------------------------------
-      // 1) LOGIN: Get access + refresh token
+      // ✅ 1) Django custom login: email OR username
       // -------------------------------
       final response = await http.post(
-        Uri.parse('$baseUrl/token/'),
+        Uri.parse('${baseUrl}accounts/login/'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'username': username, 'password': password}),
+        body: jsonEncode({
+          "username": identifier,   // ✅ email or username
+          "password": password,
+        }),
       );
 
       if (response.statusCode != 200) {
-        return {"success": false, "message": "Invalid username or password"};
+        return {"success": false, "message": "Invalid username/email or password"};
       }
 
-      final tokenData = jsonDecode(response.body);
-      final access = tokenData["access"];
-      final refresh = tokenData["refresh"];
+      final data = jsonDecode(response.body);
 
+      // ✅ Extract JWT tokens
+      final access = data["access"];
+      final refresh = data["refresh"];
+
+      // ✅ SAVE TOKENS
       await _setAccessToken(access);
       await _setRefreshToken(refresh);
 
@@ -142,39 +148,36 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
 
       // -------------------------------
-      // 2) CHECK IF USER IS DRIVER
+      // ✅ 2) CHECK IF USER IS DRIVER
       // -------------------------------
       final driverRes = await http.get(
-        Uri.parse('$baseUrl/drivers/me/'),
+        Uri.parse('${baseUrl}drivers/me/'),
         headers: authHeader,
       );
 
       if (driverRes.statusCode == 200) {
-        final profile = jsonDecode(driverRes.body);
-        final status = (profile["status"] ?? "").toString().toLowerCase();
+        await updateDriverStatus("available");
 
-        // ✅ SAVE ROLE
         await prefs.setString("role", "driver");
         await prefs.setBool("logged_in", true);
 
         return {
           "success": true,
           "role": "driver",
-          "verified": status == "active" || status == "available",
-          "profile": profile,
+          "verified": true,
+          "profile": jsonDecode(driverRes.body),
         };
       }
 
       // -------------------------------
-      // 3) CHECK IF USER IS OWNER
+      // ✅ 3) CHECK IF USER IS OWNER
       // -------------------------------
       final ownerRes = await http.get(
-        Uri.parse('$baseUrl/accounts/me/'),
+        Uri.parse('${baseUrl}accounts/me/'),
         headers: authHeader,
       );
 
       if (ownerRes.statusCode == 200) {
-        // ✅ SAVE ROLE
         await prefs.setString("role", "owner");
         await prefs.setBool("logged_in", true);
 
@@ -187,18 +190,12 @@ class ApiService {
       }
 
       // -------------------------------
-      // 4) FALLBACK → OWNER
-      // (You said: treat any unknown as owner)
+      // ✅ 4) FALLBACK OWNER
       // -------------------------------
       await prefs.setString("role", "owner");
       await prefs.setBool("logged_in", true);
 
-      return {
-        "success": true,
-        "role": "owner",
-        "verified": true,
-        "profile": {},
-      };
+      return {"success": true, "role": "owner", "verified": true};
 
     } catch (e) {
       return {"success": false, "message": "Unexpected error: $e"};
@@ -221,7 +218,7 @@ class ApiService {
   }) async {
     try {
       final res = await http.post(
-        Uri.parse('$baseUrl/accounts/register/'),
+        Uri.parse('${baseUrl}accounts/register/'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "username": username.trim(),
@@ -255,7 +252,7 @@ class ApiService {
   static Future<bool> isRestaurantNameAvailable(String name) async {
     try {
       final res = await http.get(
-        Uri.parse('$baseUrl/accounts/check_restaurant/?name=${Uri.encodeComponent(name)}'),
+        Uri.parse('${baseUrl}accounts/check_restaurant/?name=${Uri.encodeComponent(name)}'),
         headers: {"Content-Type": "application/json"},
       );
       if (res.statusCode == 200) {
@@ -271,7 +268,7 @@ class ApiService {
   static Future<Map<String, dynamic>?> getOwnerProfile() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse('$baseUrl/accounts/me/'),
+        Uri.parse('${baseUrl}accounts/me/'),
         headers: await _authHeaders(),
       );
     });
@@ -289,7 +286,7 @@ class ApiService {
   static Future<Map<String, dynamic>?> getCurrentDriver() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/drivers/me/"),
+        Uri.parse('${baseUrl}drivers/me/'),
         headers: await _authHeaders(),
       );
     });
@@ -305,7 +302,7 @@ class ApiService {
   static Future<bool> updateDriverStatus(String newStatus) async {
     final res = await _withAuthRetry(() async {
       return http.patch(
-        Uri.parse("$baseUrl/drivers/me/status/"),
+        Uri.parse("${baseUrl}drivers/me/status/"),
         headers: await _authHeaders(),
         body: jsonEncode({"status": newStatus}),
       );
@@ -320,7 +317,7 @@ class ApiService {
     try {
       final res = await _withAuthRetry(() async {
         return http.patch(
-          Uri.parse("$baseUrl/drivers/update_location/"),
+          Uri.parse("${baseUrl}drivers/update_location/"),
           headers: await _authHeaders(),
           body: jsonEncode({"latitude": latitude, "longitude": longitude}),
         );
@@ -346,7 +343,7 @@ class ApiService {
     try {
       final res = await _withAuthRetry(() async {
         return http.get(
-          Uri.parse("$baseUrl/trash_pickups/"),
+          Uri.parse("${baseUrl}trash_pickups/"),
           headers: await _authHeaders(),
         );
       });
@@ -365,7 +362,7 @@ class ApiService {
     try {
       final res = await _withAuthRetry(() async {
         return http.post(
-          Uri.parse("$baseUrl/trash_pickups/"),
+          Uri.parse("${baseUrl}trash_pickups/"),
           headers: await _authHeaders(),
           body: jsonEncode(data),
         );
@@ -395,7 +392,7 @@ class ApiService {
     try {
       final res = await _withAuthRetry(() async {
         return http.patch(
-          Uri.parse("$baseUrl/trash_pickups/$id/"),
+          Uri.parse("${baseUrl}trash_pickups/$id/"),
           headers: await _authHeaders(),
           body: jsonEncode(data),
         );
@@ -413,7 +410,7 @@ class ApiService {
   static Future<bool> cancelPickup(int pickupId) async {
     final res = await _withAuthRetry(() async {
       return http.patch(
-        Uri.parse("$baseUrl/trash_pickups/$pickupId/cancel/"),
+        Uri.parse("${baseUrl}trash_pickups/$pickupId/cancel/"),
         headers: await _authHeaders(),
       );
     });
@@ -424,7 +421,7 @@ class ApiService {
   static Future<List<dynamic>> getAvailablePickups() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse('$baseUrl/trash_pickups/available/'),
+        Uri.parse('${baseUrl}trash_pickups/available/'),
         headers: await _authHeaders(),
       );
     });
@@ -440,7 +437,7 @@ class ApiService {
   static Future<bool> acceptPickup(int pickupId) async {
     final res = await _withAuthRetry(() async {
       return http.patch(
-        Uri.parse('$baseUrl/trash_pickups/$pickupId/accept/'),
+        Uri.parse('${baseUrl}trash_pickups/$pickupId/accept/'),
         headers: await _authHeaders(),
       );
     });
@@ -450,7 +447,7 @@ class ApiService {
   static Future<bool> startPickup(int id) async {
     final res = await _withAuthRetry(() async {
       return http.patch(
-        Uri.parse('$baseUrl/trash_pickups/$id/start/'),
+        Uri.parse('${baseUrl}trash_pickups/$id/start/'),
         headers: await _authHeaders(),
       );
     });
@@ -460,7 +457,7 @@ class ApiService {
   static Future<bool> completePickup(int pickupId) async {
     final res = await _withAuthRetry(() async {
       return http.patch(
-        Uri.parse('$baseUrl/trash_pickups/$pickupId/complete/'),
+        Uri.parse('${baseUrl}trash_pickups/$pickupId/complete/'),
         headers: await _authHeaders(),
       );
     });
@@ -470,7 +467,7 @@ class ApiService {
   static Future<List<dynamic>> getAssignedPickups() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse('$baseUrl/trash_pickups/'),
+        Uri.parse('${baseUrl}trash_pickups/'),
         headers: await _authHeaders(),
       );
     });
@@ -490,7 +487,7 @@ class ApiService {
     try {
       final res = await _withAuthRetry(() async {
         return http.get(
-          Uri.parse('$baseUrl/rewards/points/'),
+          Uri.parse('${baseUrl}rewards/points/'),
           headers: await _authHeaders(),
         );
       });
@@ -509,7 +506,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getRewardPoints() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/rewards/points/"),
+        Uri.parse("${baseUrl}rewards/points/"),
         headers: await _authHeaders(),
       );
     });
@@ -520,7 +517,7 @@ class ApiService {
   static Future<List<dynamic>> getRewardTransactions() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/rewards/transactions/"),
+        Uri.parse("${baseUrl}rewards/transactions/"),
         headers: await _authHeaders(),
       );
     });
@@ -531,7 +528,7 @@ class ApiService {
   static Future<List<dynamic>> getVouchers() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/rewards/vouchers/"),
+        Uri.parse("${baseUrl}rewards/vouchers/"),
         headers: await _authHeaders(),
       );
     });
@@ -543,7 +540,7 @@ class ApiService {
     try {
       final res = await _withAuthRetry(() async {
         return http.post(
-          Uri.parse("$baseUrl/rewards/redeem/"),
+          Uri.parse("${baseUrl}rewards/redeem/"),
           headers: await _authHeaders(),
           body: jsonEncode({'voucher_id': voucherId}),
         );
@@ -558,7 +555,7 @@ class ApiService {
   static Future<List<dynamic>> getMyRewards() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse('$baseUrl/rewards/my_rewards/'),
+        Uri.parse('${baseUrl}rewards/my_rewards/'),
         headers: await _authHeaders(),
       );
     });
@@ -573,7 +570,7 @@ class ApiService {
   static Future<List<dynamic>> getRewardRedemptions() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/rewards/redemptions/"),
+        Uri.parse('${baseUrl}rewards/redemptions/'),
         headers: await _authHeaders(),
       );
     });
@@ -591,7 +588,7 @@ class ApiService {
   static Future<List<dynamic>> getDonationDrives() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/donations/drives/"),
+        Uri.parse('${baseUrl}donations/drives/'),
         headers: await _authHeaders(),
       );
     });
@@ -609,7 +606,7 @@ class ApiService {
   static Future<List<dynamic>> getMyDonations() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/donations/participations/"),
+        Uri.parse('${baseUrl}donations/participations/'),
         headers: await _authHeaders(),
       );
     });
@@ -625,7 +622,7 @@ class ApiService {
   }) async {
     final res = await _withAuthRetry(() async {
       return http.post(
-        Uri.parse("$baseUrl/donations/participations/"),
+        Uri.parse('${baseUrl}donations/participations/'),
         headers: await _authHeaders(),
         body: jsonEncode({
           "drive": driveId,
@@ -646,7 +643,7 @@ class ApiService {
   static Future<List<dynamic>> getEmployees() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse('$baseUrl/employees/'),
+        Uri.parse('${baseUrl}employees/'),
         headers: await _authHeaders(),
       );
     });
@@ -670,7 +667,7 @@ class ApiService {
 
     final res = await _withAuthRetry(() async {
       return http.post(
-        Uri.parse('$baseUrl/employees/'),
+        Uri.parse('${baseUrl}employees/'),
         headers: await _authHeaders(),
         body: jsonEncode({
           'username': email.split('@')[0],
@@ -697,7 +694,7 @@ class ApiService {
   }) async {
     final res = await _withAuthRetry(() async {
       return http.patch(
-        Uri.parse('$baseUrl/employees/$id/'),
+        Uri.parse('${baseUrl}employees/$id/'),
         headers: await _authHeaders(),
         body: jsonEncode({
           'name': name,
@@ -715,7 +712,7 @@ class ApiService {
   static Future<void> deleteEmployee(int id) async {
     final res = await _withAuthRetry(() async {
       return http.delete(
-        Uri.parse('$baseUrl/employees/$id/'),
+        Uri.parse('${baseUrl}employees/$id/'),
         headers: await _authHeaders(),
       );
     });
@@ -730,7 +727,7 @@ class ApiService {
   static Future<List<dynamic>> getPlans() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/subscriptions/plans/"),
+        Uri.parse('${baseUrl}subscriptions/plans/'),
         headers: await _authHeaders(),
       );
     });
@@ -741,7 +738,7 @@ class ApiService {
   static Future<Map<String, dynamic>?> getMySubscription() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/subscriptions/mine/"),
+        Uri.parse('${baseUrl}subscriptions/mine/'),
         headers: await _authHeaders(),
       );
     });
@@ -770,7 +767,7 @@ class ApiService {
 
     final res = await _withAuthRetry(() async {
       return http.post(
-        Uri.parse("$baseUrl/subscriptions/subscribe/"),
+        Uri.parse('${baseUrl}subscriptions/subscribe/'),
         headers: await _authHeaders(),
         body: jsonEncode(body),
       );
@@ -786,7 +783,7 @@ class ApiService {
   static Future<String> cancelAutoRenew() async {
     final res = await _withAuthRetry(() async {
       return http.post(
-        Uri.parse("$baseUrl/subscriptions/cancel/"),
+        Uri.parse('${baseUrl}subscriptions/cancel/'),
         headers: await _authHeaders(),
       );
     });
@@ -801,7 +798,7 @@ class ApiService {
   static Future<List<dynamic>> getPaymentHistory() async {
     final res = await _withAuthRetry(() async {
       return http.get(
-        Uri.parse("$baseUrl/subscriptions/payments/"),
+        Uri.parse('${baseUrl}subscriptions/payments/'),
         headers: await _authHeaders(),
       );
     });
