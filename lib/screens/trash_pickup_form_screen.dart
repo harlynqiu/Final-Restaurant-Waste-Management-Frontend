@@ -21,7 +21,6 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   TimeOfDay? _selectedTime;
   bool _isLoading = false;
   bool _loadingDrives = true;
-  int _points = 0;
 
   String _pickupOption = "now";
   String? _selectedWasteType;
@@ -30,7 +29,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
   static const Color darwcosGreen = Color(0xFF015704);
 
   List<dynamic> _donationDrives = [];
-  Map<String, dynamic>? _employee;
+  Map<String, dynamic>? _ownerProfile;
 
   final Map<String, String> _wasteTypes = {
     "customer": "Customer Food Waste",
@@ -46,37 +45,35 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     _weightController = TextEditingController(
         text: widget.pickup?['weight_kg']?.toString() ?? "");
     _selectedWasteType = widget.pickup?['waste_type'];
-    _fetchPoints();
-    _fetchUserProfile();
+
+    _fetchOwnerProfile();
     _fetchDonationDrives();
   }
 
-  Future<void> _fetchUserProfile() async {
-    if (widget.pickup != null) return;
+  // ========================================================
+  // ✅ Fetch owner profile only (no employee fallback)
+  // ========================================================
+  Future<void> _fetchOwnerProfile() async {
     try {
-      final employee = await ApiService.getMyEmployeeProfile();
-      if (employee != null) {
+      final owner = await ApiService.getOwnerProfile();
+      if (owner != null) {
         setState(() {
-          _employee = employee;
-          _addressController.text = employee['address'] ??
-              employee['pickup_address'] ??
-              employee['restaurant_name'] ??
-              'No Address Found';
+          _ownerProfile = owner;
+          _addressController.text = owner['address'] ?? 'No Address';
         });
-      } else {
-        _addressController.text = 'No Address Found';
+        return;
       }
+
+      // No owner found → fail
+      _addressController.text = 'No Address';
     } catch (e) {
-      _addressController.text = 'No Address Found';
+      _addressController.text = 'No Address';
     }
   }
 
-  Future<void> _fetchPoints() async {
-    final pts = await ApiService.getUserPoints();
-    if (!mounted) return;
-    setState(() => _points = pts);
-  }
-
+  // ========================================================
+  // ✅ Donation drives
+  // ========================================================
   Future<void> _fetchDonationDrives() async {
     try {
       final drives = await ApiService.getDonationDrives();
@@ -84,17 +81,22 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
         _donationDrives = drives
             .map((d) => {
                   "id": int.tryParse(d["id"].toString()) ?? 0,
-                  "title": d["title"] ?? d["name"] ?? "Untitled Drive",
+                  "title": d["title"] ?? d["name"] ?? "Untitled",
                 })
             .toList();
         _loadingDrives = false;
       });
     } catch (e) {
-      _donationDrives = [];
-      _loadingDrives = false;
+      setState(() {
+        _donationDrives = [];
+        _loadingDrives = false;
+      });
     }
   }
 
+  // ========================================================
+  // ✅ Pick Date & Time
+  // ========================================================
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -112,8 +114,12 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
+  // ========================================================
+  // ✅ Submit Pickup
+  // ========================================================
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
     if (_selectedDonationDriveId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please select a donation drive.")),
@@ -121,11 +127,20 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
       return;
     }
 
+    if (_ownerProfile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Owner profile not found.")),
+      );
+      return;
+    }
+
+    // Scheduled datetime
     DateTime scheduledDate;
     if (_pickupOption == "schedule") {
       if (_selectedDate == null || _selectedTime == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("Please select both date and time for pickup.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Select both date and time.")),
+        );
         return;
       }
       scheduledDate = DateTime(
@@ -140,29 +155,23 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     }
 
     setState(() => _isLoading = true);
-    final employeeProfile = await ApiService.getMyEmployeeProfile();
 
-    if (employeeProfile == null || employeeProfile['restaurant_name'] == null) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Only restaurant users can create pickups.")));
-      return;
-    }
-
+    final profile = _ownerProfile!;
     final body = {
       "scheduled_date": scheduledDate.toIso8601String(),
       "weight_kg": double.parse(_weightController.text),
       "pickup_address": _addressController.text,
-      "restaurant_name":
-          employeeProfile['restaurant_name'] ?? 'Unknown Restaurant',
+      "restaurant_name": profile['restaurant_name'],
       "waste_type": _selectedWasteType,
       "donation_drive": _selectedDonationDriveId,
+      "latitude": profile['latitude'] ?? 0,
+      "longitude": profile['longitude'] ?? 0,
     };
 
     dynamic result;
     if (widget.pickup == null) {
-      final success = await ApiService.addTrashPickup(body);
-      result = success ? {} : null;
+      final ok = await ApiService.addTrashPickup(body);
+      result = ok ? {} : null;
     } else {
       result = await ApiService.updateTrashPickup(widget.pickup!['id'], body);
     }
@@ -170,14 +179,15 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     setState(() => _isLoading = false);
 
     if (result != null) {
-      if (!mounted) return;
       Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(widget.pickup == null
-            ? "Pickup scheduled successfully!"
-            : "Pickup updated successfully!"),
-        backgroundColor: darwcosGreen,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.pickup == null
+              ? "Pickup scheduled successfully!"
+              : "Pickup updated successfully!"),
+          backgroundColor: darwcosGreen,
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Failed to save pickup.")),
@@ -185,6 +195,9 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
     }
   }
 
+  // ========================================================
+  // ✅ UI
+  // ========================================================
   @override
   Widget build(BuildContext context) {
     InputDecoration _fieldDecoration({
@@ -201,7 +214,6 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
-        labelStyle: TextStyle(color: Colors.grey[700]),
       );
     }
 
@@ -246,6 +258,7 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                             v == null || v.isEmpty ? "Address missing" : null,
                       ),
                       const SizedBox(height: 16),
+
                       TextFormField(
                         controller: _weightController,
                         decoration: _fieldDecoration(
@@ -266,32 +279,33 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedWasteType,
-                          items: _wasteTypes.entries
-                              .map((entry) => DropdownMenuItem(
-                                    value: entry.key,
-                                    child: Text(entry.value,
-                                        overflow: TextOverflow.ellipsis),
-                                  ))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _selectedWasteType = v),
-                          decoration: _fieldDecoration(
-                              label: "Type of Waste",
-                              icon: Icons.delete_outline),
-                          validator: (v) =>
-                              v == null ? "Select waste type" : null,
-                        ),
+
+                      DropdownButtonFormField<String>(
+                        value: _selectedWasteType,
+                        items: _wasteTypes.entries
+                            .map((e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value,
+                                      overflow: TextOverflow.ellipsis),
+                                ))
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => _selectedWasteType = v),
+                        decoration: _fieldDecoration(
+                            label: "Type of Waste",
+                            icon: Icons.delete_outline),
+                        validator: (v) =>
+                            v == null ? "Select waste type" : null,
                       ),
+
                       const SizedBox(height: 16),
+
                       _loadingDrives
-                        ? const Center(child: CircularProgressIndicator(color: darwcosGreen))
-                        : IntrinsicWidth(
-                            child: DropdownButtonFormField<int>(
-                              isExpanded: true, // ✅ avoids text squeezing
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                  color: darwcosGreen))
+                          : DropdownButtonFormField<int>(
+                              isExpanded: true,
                               value: _selectedDonationDriveId,
                               items: _donationDrives
                                   .map((drive) => DropdownMenuItem<int>(
@@ -302,32 +316,25 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                                         ),
                                       ))
                                   .toList(),
-                              onChanged: (v) => setState(() => _selectedDonationDriveId = v),
-                              decoration: InputDecoration(
-                                labelText: "Select Donation Drive",
-                                prefixIcon:
-                                    const Icon(Icons.volunteer_activism, color: darwcosGreen),
-                                filled: true,
-                                fillColor: Colors.grey[100],
-                                contentPadding:
-                                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14), // ✅ reduced padding
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
-                                ),
+                              onChanged: (v) =>
+                                  setState(() => _selectedDonationDriveId = v),
+                              decoration: _fieldDecoration(
+                                label: "Donation Drive",
+                                icon: Icons.volunteer_activism,
                               ),
                               validator: (v) =>
-                                  v == null ? "Please select a donation drive" : null,
+                                  v == null ? "Select a donation drive" : null,
                             ),
-                          ),
+
                       const SizedBox(height: 24),
+
                       _isLoading
                           ? const Center(
                               child: CircularProgressIndicator(
                                   color: darwcosGreen))
                           : SizedBox(
                               width: double.infinity,
-                              child: ElevatedButton.icon(
+                              child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: darwcosGreen,
                                   padding:
@@ -336,16 +343,13 @@ class _TrashPickupFormScreenState extends State<TrashPickupFormScreen> {
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
-                                icon: const Icon(Icons.save,
-                                    color: Colors.white),
-                                label: const Text(
+                                onPressed: _submit,
+                                child: const Text(
                                   "Confirm Pickup",
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold),
                                 ),
-                                onPressed: _submit,
                               ),
                             ),
                     ],

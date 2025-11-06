@@ -72,7 +72,7 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       final url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng";
       final response = await http.get(Uri.parse(url), headers: {
-        "User-Agent": "DARWCOSApp/1.0 (support@darwcos.com)"
+        "User-Agent": "DARWCOSApp/1.0"
       });
 
       if (response.statusCode == 200) {
@@ -90,7 +90,7 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       final url = "https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=5";
       final response = await http.get(Uri.parse(url), headers: {
-        "User-Agent": "DARWCOSApp/1.0 (support@darwcos.com)"
+        "User-Agent": "DARWCOSApp/1.0"
       });
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -105,7 +105,8 @@ class _SignupScreenState extends State<SignupScreen> {
     if (_selectedLocation == null) {
       await _initLocationOnce();
     }
-    LatLng tempLocation = _selectedLocation ?? LatLng(7.0731, 125.6128); // Davao City default
+    LatLng tempLocation = _selectedLocation ?? LatLng(7.0731, 125.6128);
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -114,7 +115,8 @@ class _SignupScreenState extends State<SignupScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) {
-        TextEditingController searchCtrl = TextEditingController(text: _addressController.text);
+        TextEditingController searchCtrl =
+            TextEditingController(text: _addressController.text);
 
         return StatefulBuilder(
           builder: (context, setModalState) => SafeArea(
@@ -205,7 +207,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     onPressed: () {
                       Navigator.pop(context);
                       setState(() => _selectedLocation = tempLocation);
-                      _updateAddressFromLatLng(tempLocation.latitude, tempLocation.longitude);
+                      _updateAddressFromLatLng(
+                          tempLocation.latitude, tempLocation.longitude);
                     },
                     label: const Text(
                       "Confirm Location",
@@ -220,7 +223,6 @@ class _SignupScreenState extends State<SignupScreen> {
       },
     );
   }
-
 
   Future<void> _register() async {
     if (_restaurantController.text.trim().isEmpty ||
@@ -240,31 +242,23 @@ class _SignupScreenState extends State<SignupScreen> {
 
     setState(() => _isLoading = true);
 
-    final result = await ApiService.signupUser(
-      username: _usernameController.text.trim(),
-      password: _passwordController.text.trim(),
-      email: _emailController.text.trim(),
-      name: _usernameController.text.trim(),
-      position: "Owner",
-      restaurantName: _restaurantController.text.trim(),
-      address: _addressController.text.trim(),
-      latitude: _selectedLocation!.latitude,
-      longitude: _selectedLocation!.longitude,
-    );
+    final response = await ApiService.registerOwner(
+    username: _usernameController.text.trim(),
+    password: _passwordController.text.trim(),
+    email: _emailController.text.trim(),
+    restaurantName: _restaurantController.text.trim(),
+    address: _addressController.text.trim(),
+    latitude: _selectedLocation!.latitude,
+    longitude: _selectedLocation!.longitude,
+  );
 
-    if (!mounted) return;
+
     setState(() => _isLoading = false);
 
-    if (result["success"]) {
+    if (response["success"]) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result["message"] ?? "Registration successful!")),
+        SnackBar(content: Text(response["message"] ?? "Registration successful.")),
       );
-
-      if (result["requiresVerification"] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please verify your account before login.")),
-        );
-      }
 
       Navigator.pushReplacement(
         context,
@@ -272,7 +266,7 @@ class _SignupScreenState extends State<SignupScreen> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result["message"] ?? "Registration failed.")),
+        SnackBar(content: Text(response["message"] ?? "Registration failed.")),
       );
     }
   }
@@ -311,13 +305,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    _buildTextField("Full Name / Username", _usernameController, Icons.person),
+                    _buildField("Username", _usernameController, Icons.person),
                     const SizedBox(height: 16),
-                    _buildTextField("Email (optional)", _emailController, Icons.email),
+                    _buildField("Email (optional)", _emailController, Icons.email),
                     const SizedBox(height: 16),
-                    _buildTextField("Password", _passwordController, Icons.lock, obscure: true),
+                    _buildField("Password", _passwordController, Icons.lock, obscure: true),
                     const SizedBox(height: 16),
-                    _buildTextField("Restaurant Name", _restaurantController, Icons.store),
+                    _buildField("Restaurant Name", _restaurantController, Icons.store),
                     const SizedBox(height: 16),
 
                     TextField(
@@ -333,6 +327,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         border: const OutlineInputBorder(),
                       ),
                     ),
+
                     const SizedBox(height: 24),
 
                     SizedBox(
@@ -352,6 +347,7 @@ class _SignupScreenState extends State<SignupScreen> {
                               ),
                             ),
                     ),
+
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -362,7 +358,6 @@ class _SignupScreenState extends State<SignupScreen> {
                             context,
                             MaterialPageRoute(builder: (_) => const LoginScreen()),
                           ),
-                          style: TextButton.styleFrom(foregroundColor: darwcosGreen),
                           child: const Text(
                             "Sign in",
                             style: TextStyle(fontWeight: FontWeight.bold, color: darwcosGreen),
@@ -380,7 +375,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildTextField(
+  Widget _buildField(
     String label,
     TextEditingController controller,
     IconData icon, {

@@ -74,6 +74,7 @@ flutter:
      - assets/images/in_progress.png
      - assets/images/error.png
      - assets/images/driver.png
+     - assets/images/edit_employee.png
 
   #   - images/a_dot_ham.jpeg
 

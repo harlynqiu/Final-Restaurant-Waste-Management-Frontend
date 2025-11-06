@@ -424,115 +424,163 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   }
 
   // Employee details bottom sheet
-  void _showEmployeeDetailsBottomSheet(Map<String, dynamic> emp) {
-    final String name = emp['name'] ?? "Unnamed";
-    final String position = emp['position'] ?? "No position";
-    final String email = emp['email'] ?? "No email";
-    final String restaurant = emp['restaurant_name'] ?? "Not assigned";
-    final String address = emp['address'] ?? "No address provided";
-    final String status = emp['status'] ?? "Active";
-    final String date = emp['created_at'] ?? "N/A";
+void _showEmployeeDetailsBottomSheet(Map<String, dynamic> emp) {
+  final String name = emp['name'] ?? "Unnamed";
+  final String position = emp['position'] ?? "No position";
+  final String email = emp['email'] ?? "No email";
+  final String restaurant = emp['restaurant_name'] ?? "Not assigned";
+  final String address = emp['address'] ?? "No address provided";
+  final String status = emp['status'] ?? "Active";
+  final String date = emp['created_at'] ?? "N/A";
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor:
-                        Colors.primaries[name.hashCode % Colors.primaries.length]
-                            .withOpacity(0.2),
-                    child: Text(
-                      name.isNotEmpty
-                          ? name.trim().split(" ").map((e) => e[0]).take(2).join().toUpperCase()
-                          : "??",
-                      style: const TextStyle(
-                        color: darwcosGreen,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      name,
-                      style: const TextStyle(
-                        color: darwcosGreen,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _detailRow(Icons.badge_outlined, "Position", position),
-              _detailRow(Icons.email_outlined, "Email", email),
-              _detailRow(Icons.store_mall_directory_outlined, "Restaurant", restaurant),
-              _detailRow(Icons.location_on_outlined, "Address", address),
-              _detailRow(Icons.calendar_today_outlined, "Date Added", date),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.verified_rounded, color: darwcosGreen, size: 20),
-                  const SizedBox(width: 6),
-                  Text(
-                    "Status: ${status.toUpperCase()}",
+            ),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor:
+                      Colors.primaries[name.hashCode % Colors.primaries.length]
+                          .withOpacity(0.2),
+                  child: Text(
+                    name.isNotEmpty
+                        ? name.trim().split(" ").map((e) => e[0]).take(2).join().toUpperCase()
+                        : "??",
                     style: const TextStyle(
                       color: darwcosGreen,
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 18,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Center(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                  label: const Text(
-                    "Close",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: darwcosGreen,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(context),
                 ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                      color: darwcosGreen,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _detailRow(Icons.badge_outlined, "Position", position),
+            _detailRow(Icons.email_outlined, "Email", email),
+            _detailRow(Icons.store_mall_directory_outlined, "Restaurant", restaurant),
+            _detailRow(Icons.location_on_outlined, "Address", address),
+            _detailRow(Icons.calendar_today_outlined, "Date Added", date),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.verified_rounded, color: darwcosGreen, size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  "Status: ${status.toUpperCase()}",
+                  style: const TextStyle(
+                    color: darwcosGreen,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 25),
+
+            // ✅ EDIT + CLOSE BUTTONS
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                    label: const Text(
+                      "Edit",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: softGreen,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(context); // close sheet
+
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EmployeeFormScreen(employeeData: emp),
+                        ),
+                      );
+
+                      // Refresh list after update
+                      if (result == true) {
+                        await Future.delayed(const Duration(milliseconds: 350));
+                        _loadEmployees();
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    label: const Text(
+                      "Close",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: darwcosGreen,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // Detail row helper
   Widget _detailRow(IconData icon, String label, String value) {

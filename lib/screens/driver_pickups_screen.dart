@@ -1,9 +1,8 @@
 // lib/screens/driver_pickups_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
-import 'pickup_map_screen.dart';
 import 'pickup_detail_screen.dart';
 
 class DriverPickupsScreen extends StatefulWidget {
@@ -14,12 +13,10 @@ class DriverPickupsScreen extends StatefulWidget {
 }
 
 class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
-  bool _loading = true;
-  List<dynamic> _allPickups = [];
-  String _error = "";
-  String _searchQuery = "";
+  static const Color darwcosGreen = Color(0xFF015704);
 
-  static const Color darwcosGreen = Color.fromARGB(255, 1, 87, 4);
+  bool _loading = true;
+  List<dynamic> _pickups = [];
 
   @override
   void initState() {
@@ -27,211 +24,179 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
     _loadPickups();
   }
 
-  // ---------------- LOAD PICKUPS ----------------
   Future<void> _loadPickups() async {
-    final prefs = await SharedPreferences.getInstance();
-    debugPrint("🔑 Access token: ${prefs.getString('access_token')}");
-
     try {
       final data = await ApiService.getAssignedPickups();
-
-      // ✅ Convert accepted pickups to in-progress automatically
-      for (final p in data) {
-        if (p['status'].toString().toUpperCase() == "ACCEPTED") {
-          await ApiService.startPickup(p['id']);
-        }
-      }
-
-      final refreshed = await ApiService.getAssignedPickups();
-
       setState(() {
-        _allPickups = refreshed;
+        _pickups = data;
         _loading = false;
-        _error = "";
       });
     } catch (e) {
-      setState(() {
-        _error = "❌ Failed to load pickups: $e";
-        _loading = false;
-      });
+      setState(() => _loading = false);
     }
   }
 
   Future<void> _refresh() async => _loadPickups();
 
-  // ---------------- STATUS COLOR ----------------
-  Color _statusColor(String status) {
-    switch (status.toUpperCase()) {
-      case "PENDING":
-        return Colors.grey;
-      case "ACCEPTED":
+  // ✅ Format date
+  String _formatDate(dynamic value) {
+    try {
+      final d = DateTime.parse(value.toString());
+      return DateFormat('MMM dd, yyyy • hh:mm a').format(d);
+    } catch (_) {
+      return "No date";
+    }
+  }
+
+  // ✅ Status color
+  Color _statusColor(String s) {
+    switch (s.toUpperCase()) {
       case "IN_PROGRESS":
         return Colors.orange;
       case "COMPLETED":
         return Colors.green;
-      case "CANCELLED":
-        return Colors.red;
       default:
-        return Colors.blueGrey;
+        return Colors.grey;
     }
   }
 
-  // ---------------- FORMAT DATE ----------------
-  String _formatDate(dynamic dateString) {
+  // ✅ Complete pickup
+  Future<void> _completePickup(int id) async {
     try {
-      if (dateString != null &&
-          dateString.toString().isNotEmpty &&
-          dateString.toString().toLowerCase() != "null") {
-        final parsed = DateTime.parse(dateString.toString());
-        return DateFormat('MMM dd, yyyy • hh:mm a').format(parsed);
+      final ok = await ApiService.completePickup(id);
+      if (ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Pickup Completed!"),
+            backgroundColor: darwcosGreen,
+          ),
+        );
+        _loadPickups();
       }
-      return "No scheduled date";
-    } catch (_) {
-      return "Invalid date";
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
+      );
     }
   }
 
-  // ---------------- FILTER + GROUP ----------------
-  List<dynamic> _filterByStatus(String status) {
-    final filtered = _allPickups.where((p) {
-      final s = (p['status'] ?? '').toString().toUpperCase();
-      final matchStatus = s == status;
-      final query = _searchQuery.toLowerCase();
-      final restaurant = (p['restaurant_name'] ?? '').toLowerCase();
-      final address = (p['pickup_address'] ?? '').toLowerCase();
-      final type = (p['waste_type'] ?? '').toLowerCase();
-      return matchStatus &&
-          (restaurant.contains(query) ||
-              address.contains(query) ||
-              type.contains(query));
-    }).toList();
-    filtered.sort((a, b) =>
-        (b['created_at'] ?? '').compareTo(a['created_at'] ?? ''));
-    return filtered;
-  }
+  // ✅ Build card
+  Widget _pickupCard(Map<String, dynamic> p) {
+    final id = p["id"];
+    final status = p["status"].toString().toUpperCase();
+    final color = _statusColor(status);
 
-  // ---------------- BUILD CARD ----------------
-  Widget _buildCard(Map<String, dynamic> pickup) {
-    final address = pickup['pickup_address'] ?? "No Address";
-    final wasteType = pickup['waste_type'] ?? "N/A";
-    final weight = pickup['weight_kg'] ?? "0";
-    final status = (pickup['status'] ?? 'Unknown').toString().toUpperCase();
-    final date = _formatDate(pickup['scheduled_date'] ?? pickup['created_at']);
-    final statusColor = _statusColor(status);
+    final address = p["pickup_address"] ?? "No Address";
+    final wType = p["waste_type"] ?? "-";
+    final weight = p["weight_kg"]?.toString() ?? "0";
+    final date = _formatDate(p["scheduled_date"] ?? p["created_at"]);
 
     return Container(
       width: 260,
       margin: const EdgeInsets.only(right: 14),
-      child: GestureDetector(
-        onTap: () async {
-          // ✅ When tapping, open details (where “Complete” is available)
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PickupDetailScreen(pickup: pickup),
-            ),
-          );
-          if (result == true) {
-            _loadPickups();
-          }
-        },
-        child: Card(
-          color: Colors.white,
-          elevation: 3,
-          shadowColor: darwcosGreen.withOpacity(0.1),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+      child: Card(
+        elevation: 3,
+        color: Colors.white,
+        shadowColor: darwcosGreen.withOpacity(0.12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PickupDetailScreen(pickup: p),
+              ),
+            );
+            if (result is Map && result['refresh'] == true) {
+              _loadPickups();
+            }
+          },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Status + map icon
+                // Status pill
                 Row(
                   children: [
                     Container(
                       padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: color.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Text(
                         status,
                         style: TextStyle(
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13),
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.map,
-                          color: darwcosGreen, size: 20),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PickupMapScreen(
-                              pickupId: pickup['id'],
-                              address: address,
-                              latitude: double.tryParse(
-                                  pickup['latitude']?.toString() ?? ''),
-                              longitude: double.tryParse(
-                                  pickup['longitude']?.toString() ?? ''),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                    const Icon(Icons.map, color: darwcosGreen, size: 20),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 10),
+
+                // Address
                 Text(
                   address,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 15,
+                    fontSize: 16,
                     color: Colors.black87,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
+
+                // Waste & Weight
                 Text(
-                  "🗑 $wasteType • ⚖ $weight kg",
-                  style: const TextStyle(fontSize: 13.5, color: Colors.black87),
+                  "🗑 $wType   •   ⚖ $weight kg",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                  ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
+
+                // Date
                 Text(
                   "📅 $date",
-                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                  ),
                 ),
                 const SizedBox(height: 10),
 
-                // ✅ No more “Start” button; show info only
                 if (status == "IN_PROGRESS")
                   Align(
                     alignment: Alignment.centerRight,
-                    child: Text(
-                      "In Progress...",
-                      style: TextStyle(
-                        color: Colors.orange[800],
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                    child: ElevatedButton(
+                      onPressed: () => _completePickup(id),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: darwcosGreen,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                    ),
-                  ),
-                if (status == "COMPLETED")
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      "Completed",
-                      style: TextStyle(
-                        color: Colors.green[700],
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                      child: const Text(
+                        "Complete",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ),
@@ -243,47 +208,37 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
     );
   }
 
-  // ---------------- BUILD SECTION ----------------
-  Widget _buildHorizontalSection(String title, List<dynamic> items,
-      {String? imagePath}) {
+  // ✅ Build horizontal list section
+  Widget _section(String title, List<dynamic> items, String icon) {
     if (items.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 28),
+      padding: const EdgeInsets.only(bottom: 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              if (imagePath != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Image.asset(
-                    imagePath,
-                    height: 32,
-                    width: 32,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: darwcosGreen,
-                  ),
+              Image.asset(icon, width: 32, height: 32),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: darwcosGreen,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
+
           SizedBox(
-            height: 230,
+            height: 240,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
-              itemBuilder: (context, index) => _buildCard(items[index]),
+              itemBuilder: (ctx, index) => _pickupCard(items[index]),
             ),
           ),
         ],
@@ -291,93 +246,67 @@ class _DriverPickupsScreenState extends State<DriverPickupsScreen> {
     );
   }
 
-  // ---------------- BUILD UI ----------------
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator(color: darwcosGreen)),
-      );
-    }
+    final inProgress = _pickups.where((p) =>
+        p["status"].toString().toUpperCase() == "IN_PROGRESS").toList();
 
-    if (_error.isNotEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text("Assigned Pickups",
-              style: TextStyle(color: darwcosGreen)),
-          backgroundColor: Colors.white,
-          iconTheme: const IconThemeData(color: darwcosGreen),
-        ),
-        body: Center(child: Text(_error)),
-      );
-    }
-
-    final inProgress = _filterByStatus("IN_PROGRESS");
-    final completed = _filterByStatus("COMPLETED");
+    final completed = _pickups.where((p) =>
+        p["status"].toString().toUpperCase() == "COMPLETED").toList();
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text("Assigned Pickups",
-            style: TextStyle(
-                color: darwcosGreen,
-                fontWeight: FontWeight.bold,
-                fontSize: 22)),
+        title: const Text(
+          "My Pickups",
+          style: TextStyle(
+            color: darwcosGreen,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.white,
         elevation: 2,
         iconTheme: const IconThemeData(color: darwcosGreen),
         actions: [
           IconButton(
-              icon: const Icon(Icons.refresh, color: darwcosGreen),
-              onPressed: _refresh)
+            icon: const Icon(Icons.refresh, color: darwcosGreen),
+            onPressed: _refresh,
+          )
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        color: darwcosGreen,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                onChanged: (v) => setState(() => _searchQuery = v),
-                decoration: InputDecoration(
-                  hintText: "Search pickups...",
-                  prefixIcon: const Icon(Icons.search, color: darwcosGreen),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
-                  ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: darwcosGreen),
+            )
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 18, vertical: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _section("In Progress", inProgress,
+                        "assets/images/in_progress.png"),
+                    _section("Completed", completed,
+                        "assets/images/complete.png"),
+
+                    if (inProgress.isEmpty && completed.isEmpty)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.only(top: 80),
+                          child: Text(
+                            "No assigned pickups yet.",
+                            style:
+                                TextStyle(color: Colors.grey, fontSize: 16),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 24),
-
-              _buildHorizontalSection("In Progress", inProgress,
-                  imagePath: "assets/images/in_progress.png"),
-              _buildHorizontalSection("Completed", completed,
-                  imagePath: "assets/images/complete.png"),
-
-              if (inProgress.isEmpty && completed.isEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 80),
-                    child: Text(
-                      "No active pickups yet.",
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 }

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
 class EmployeeFormScreen extends StatefulWidget {
-  final Map<String, dynamic>? employee; // ✅ allows editing mode
+  final Map<String, dynamic>? employeeData; // ✅ rename for clarity
 
-  const EmployeeFormScreen({super.key, this.employee});
+  const EmployeeFormScreen({super.key, this.employeeData});
 
   @override
   State<EmployeeFormScreen> createState() => _EmployeeFormScreenState();
@@ -19,16 +19,17 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
   bool _saving = false;
   static const Color darwcosGreen = Color(0xFF015704);
 
-  bool get isEditMode => widget.employee != null; // ✅ detects edit vs add mode
+  bool get isEditMode => widget.employeeData != null; // ✅ updated
 
   @override
   void initState() {
     super.initState();
+
     if (isEditMode) {
-      // ✅ Pre-fill form when editing
-      _name.text = widget.employee?['name'] ?? '';
-      _email.text = widget.employee?['email'] ?? '';
-      _position.text = widget.employee?['position'] ?? '';
+      // ✅ Pre-fill form for editing
+      _name.text = widget.employeeData?['name'] ?? '';
+      _email.text = widget.employeeData?['email'] ?? '';
+      _position.text = widget.employeeData?['position'] ?? '';
     }
   }
 
@@ -40,7 +41,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
       if (isEditMode) {
         // ✅ Update existing employee
         await ApiService.updateEmployee(
-          widget.employee!['id'],
+          widget.employeeData!['id'],
           name: _name.text.trim(),
           email: _email.text.trim(),
           position: _position.text.trim(),
@@ -49,7 +50,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("✅ Employee updated successfully!"),
+            content: Text("Employee updated successfully"),
             backgroundColor: Colors.green,
           ),
         );
@@ -64,17 +65,18 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("✅ Employee added successfully!"),
+            content: Text("Employee added successfully"),
             backgroundColor: Colors.green,
           ),
         );
       }
 
       Navigator.pop(context, true);
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("❌ Failed to save employee: $e"),
+          content: Text("Failed to save employee: $e"),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -136,14 +138,16 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // 🖼️ Header Image
+                      // header image
                       Image.asset(
                         isEditMode
                             ? "assets/images/edit_employee.png"
                             : "assets/images/add_employee.png",
                         height: 80,
                       ),
+
                       const SizedBox(height: 12),
+
                       Text(
                         isEditMode
                             ? "Update Employee Details"
@@ -154,9 +158,10 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                           fontSize: 20,
                         ),
                       ),
+
                       const SizedBox(height: 24),
 
-                      // 👤 Name
+                      // NAME
                       TextFormField(
                         controller: _name,
                         decoration: _fieldDecoration(
@@ -168,7 +173,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ✉️ Email
+                      // EMAIL
                       TextFormField(
                         controller: _email,
                         decoration: _fieldDecoration(
@@ -180,7 +185,7 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 🧾 Position
+                      // POSITION
                       TextFormField(
                         controller: _position,
                         decoration: _fieldDecoration(
@@ -190,21 +195,18 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
                         validator: (v) =>
                             v == null || v.isEmpty ? "Enter employee position" : null,
                       ),
-
                       const SizedBox(height: 28),
 
                       _saving
                           ? const Center(
-                              child: CircularProgressIndicator(
-                                  color: darwcosGreen),
+                              child: CircularProgressIndicator(color: darwcosGreen),
                             )
                           : SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: darwcosGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 16),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),

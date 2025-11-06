@@ -1,167 +1,74 @@
+// lib/screens/pickup_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../services/api_service.dart';
 
-class PickupDetailScreen extends StatefulWidget {
+class PickupDetailScreen extends StatelessWidget {
   final Map<String, dynamic> pickup;
 
   const PickupDetailScreen({super.key, required this.pickup});
 
-  @override
-  State<PickupDetailScreen> createState() => _PickupDetailScreenState();
-}
+  static const Color darwcosGreen = Color(0xFF015704);
 
-class _PickupDetailScreenState extends State<PickupDetailScreen> {
-  static const Color darwcosGreen = Color.fromARGB(255, 1, 87, 4);
-  bool _isLoading = false;
-
-  // ---------------- COMPLETE PICKUP ----------------
-  Future<void> _completePickup() async {
-    final dynamic rawId = widget.pickup['id'];
-    final int? id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
-
-    if (id == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Missing pickup ID")),
-      );
-      return;
-    }
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Mark as Complete",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: darwcosGreen,
-          ),
-        ),
-        content: const Text(
-          "Are you sure you want to mark this pickup as completed?",
-          style: TextStyle(fontSize: 15),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("No", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: darwcosGreen,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              "Yes, Complete",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final result = await ApiService.completePickupDetailed(id);
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      if (result["success"] == false) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed: ${result["message"]}"),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Pickup completed successfully!"),
-          backgroundColor: darwcosGreen,
-        ),
-      );
-
-      Navigator.pop(context, true); 
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error completing pickup: $e"),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+  // ✅ Pretty label for status
+  String _prettyStatus(String status) {
+    switch (status) {
+      case "PENDING":
+        return "Awaiting Driver";
+      case "ACCEPTED":
+        return "Driver Assigned";
+      case "IN_PROGRESS":
+        return "In Progress";
+      case "COMPLETED":
+        return "Completed";
+      case "CANCELLED":
+        return "Cancelled";
+      default:
+        return status;
     }
   }
 
-  // ---------------- SAFE DATE FORMATTER ----------------
-  String _formatDate(dynamic dateString, {dynamic fallbackDate}) {
+  String _formatDate(dynamic date) {
     try {
-      if (dateString != null &&
-          dateString.toString().isNotEmpty &&
-          dateString.toString().toLowerCase() != "null") {
-        final parsed = DateTime.parse(dateString.toString());
-        return DateFormat('MMM dd, yyyy • hh:mm a').format(parsed);
-      }
-
-      if (fallbackDate != null) {
-        final parsed = DateTime.parse(fallbackDate.toString());
-        return DateFormat('MMM dd, yyyy • hh:mm a').format(parsed);
-      }
-
-      return "No scheduled date";
-    } catch (e) {
+      if (date == null) return "No schedule";
+      final parsed = DateTime.parse(date.toString());
+      return DateFormat('MMM dd, yyyy • hh:mm a').format(parsed);
+    } catch (_) {
       return "Invalid date";
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status.toUpperCase()) {
+      case "PENDING":
+        return Colors.orange;
+      case "ACCEPTED":
+        return Colors.blueGrey;
+      case "IN_PROGRESS":
+        return Colors.blueAccent;
+      case "COMPLETED":
+        return Colors.green;
+      case "CANCELLED":
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.pickup;
+    final statusRaw = pickup["status"]?.toString().toUpperCase() ?? "UNKNOWN";
 
-    final status = p['status']?.toString().toUpperCase() ?? "UNKNOWN";
-    final wasteType = p['waste_type'] ?? "Unknown";
-    final weight = p['weight_kg']?.toString() ?? "0";
-    final scheduled = _formatDate(p['scheduled_date'] ?? p['created_at']);
-    final address =
-        p['pickup_address'] ?? p['restaurant_name'] ?? "No address provided";
+    final statusColor = _statusColor(statusRaw);
+    final statusLabel = _prettyStatus(statusRaw);  // ✅ Use pretty label
+
+    final wasteType = pickup["waste_type"] ?? "Unknown";
+    final weight = pickup["weight_kg"]?.toString() ?? "0";
+    final scheduledDate =
+        _formatDate(pickup["scheduled_date"] ?? pickup["created_at"]);
+    final address = pickup["pickup_address"] ?? "No address specified";
     final donationDrive =
-        p['donation_drive_title'] ?? p['donation_drive'] ?? "No donation drive linked";
-
-    Color statusColor;
-    switch (status) {
-      case "COMPLETED":
-        statusColor = Colors.green;
-        break;
-      case "PENDING":
-        statusColor = Colors.orangeAccent;
-        break;
-      case "CANCELLED":
-        statusColor = Colors.redAccent;
-        break;
-      case "IN_PROGRESS":
-        statusColor = Colors.blueAccent;
-        break;
-      default:
-        statusColor = Colors.grey;
-    }
+        pickup["donation_drive_title"] ?? "No donation drive linked";
+    final driver = pickup["driver_name"] ?? "No driver assigned";
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -174,162 +81,185 @@ class _PickupDetailScreenState extends State<PickupDetailScreen> {
           style: TextStyle(
             color: darwcosGreen,
             fontWeight: FontWeight.bold,
-            fontSize: 22,
           ),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: darwcosGreen))
-          : Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    color: Colors.white,
-                    elevation: 5,
-                    shadowColor: darwcosGreen.withOpacity(0.1),
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // ---------------- HEADER ----------------
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  status,
-                                  style: TextStyle(
-                                    color: statusColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              const Spacer(),
-                              const Icon(Icons.recycling,
-                                  color: darwcosGreen, size: 28),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          // ---------------- LOCATION ----------------
-                          Text(
-                            "Pickup Location (Restaurant Address):",
-                            style: TextStyle(
-                              color: darwcosGreen.withOpacity(0.8),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            address,
-                            style: const TextStyle(
-                                fontSize: 16, height: 1.4, color: Colors.black87),
-                          ),
-                          const Divider(height: 32),
-
-                          // ---------------- WASTE TYPE ----------------
-                          Text(
-                            "Waste Type:",
-                            style: TextStyle(
-                              color: darwcosGreen.withOpacity(0.8),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(wasteType,
-                              style: const TextStyle(
-                                  fontSize: 16, color: Colors.black87)),
-                          const SizedBox(height: 16),
-
-                          // ---------------- WEIGHT ----------------
-                          Text(
-                            "Weight (kg):",
-                            style: TextStyle(
-                              color: darwcosGreen.withOpacity(0.8),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text("$weight kg",
-                              style: const TextStyle(
-                                  fontSize: 16, color: Colors.black87)),
-                          const SizedBox(height: 16),
-
-                          // ---------------- DATE ----------------
-                          Text(
-                            "Scheduled Pickup Date & Time:",
-                            style: TextStyle(
-                              color: darwcosGreen.withOpacity(0.8),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(scheduled,
-                              style: const TextStyle(
-                                  fontSize: 16, color: Colors.black87)),
-
-                          const Divider(height: 32),
-
-                          // ---------------- DONATION DRIVE ----------------
-                          Text(
-                            "Donation Drive:",
-                            style: TextStyle(
-                              color: darwcosGreen.withOpacity(0.8),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            donationDrive,
-                            style: const TextStyle(
-                                fontSize: 16, color: Colors.black87),
-                          ),
-                          const SizedBox(height: 30),
-
-                          // ---------------- COMPLETE BUTTON ----------------
-                          if (status == "IN_PROGRESS")
-                            Center(
-                              child: ElevatedButton.icon(
-                                onPressed: _completePickup,
-                                icon: const Icon(Icons.check_circle,
-                                    color: Colors.white),
-                                label: const Text(
-                                  "Complete Pickup",
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: darwcosGreen,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 26, vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
-                ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ✅ Status Row (NOW USES PRETTY LABEL)
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          statusLabel,      // ✅ FIXED!
+                          style: TextStyle(
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      const Icon(Icons.recycling,
+                          size: 32, color: darwcosGreen),
+                    ],
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  // ✅ Address
+                  _sectionTitle("Pickup Location:"),
+                  Text(
+                    address,
+                    style: const TextStyle(
+                        fontSize: 16, color: Colors.black87, height: 1.4),
+                  ),
+                  _divider(),
+
+                  // ✅ Waste
+                  _sectionTitle("Waste Type:"),
+                  _sectionValue(wasteType),
+
+                  const SizedBox(height: 12),
+
+                  // ✅ Weight
+                  _sectionTitle("Weight (kg):"),
+                  _sectionValue("$weight kg"),
+
+                  const SizedBox(height: 12),
+
+                  // ✅ Schedule
+                  _sectionTitle("Scheduled Pickup:"),
+                  _sectionValue(scheduledDate),
+
+                  _divider(),
+
+                  // ✅ Donation Drive
+                  _sectionTitle("Donation Drive:"),
+                  _sectionValue(donationDrive),
+
+                  const SizedBox(height: 12),
+
+                  // ✅ Driver name
+                  _sectionTitle("Assigned Driver:"),
+                  _sectionValue(driver),
+
+                  const SizedBox(height: 25),
+
+                  // ✅ Info message based on status
+                  _infoMessage(statusRaw),
+                ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ Styled section header
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: darwcosGreen,
+        fontWeight: FontWeight.bold,
+        fontSize: 15,
+      ),
+    );
+  }
+
+  // ✅ Styled value
+  Widget _sectionValue(String text) {
+    return Text(
+      text,
+      style: const TextStyle(fontSize: 16, color: Colors.black87, height: 1.4),
+    );
+  }
+
+  // ✅ Divider
+  Widget _divider() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Divider(color: Colors.grey[300], thickness: 1),
+    );
+  }
+
+  // ✅ Info message widget
+  Widget _infoMessage(String status) {
+    IconData icon;
+    String text;
+    Color color;
+
+    switch (status) {
+      case "ACCEPTED":
+        icon = Icons.verified;
+        color = Colors.blueGrey;
+        text = "A driver has accepted your pickup. They will start it soon.";
+        break;
+
+      case "IN_PROGRESS":
+        icon = Icons.local_shipping;
+        color = Colors.blueAccent;
+        text = "Your driver is currently completing this pickup.";
+        break;
+
+      case "PENDING":
+        icon = Icons.schedule;
+        color = Colors.orangeAccent;
+        text = "Your pickup is waiting for a driver.";
+        break;
+
+      case "COMPLETED":
+        icon = Icons.check_circle;
+        color = Colors.green;
+        text =
+            "This pickup is completed. Your reward points have been updated.";
+        break;
+
+      default:
+        icon = Icons.info_outline;
+        color = Colors.grey;
+        text = "Pickup status update.";
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(color: Colors.black54, height: 1.4),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,23 +1,17 @@
 import 'package:flutter/material.dart';
-// import 'package:firebase_core/firebase_core.dart'; // ❌ Commented out since Firebase not used yet
-// import 'firebase_options.dart'; // ❌ Commented out — generated later when you link Firebase
+import 'package:shared_preferences/shared_preferences.dart';
 
 // -------------------
 // 🖥️ Screen Imports
 // -------------------
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/driver_dashboard.dart';
 import 'screens/available_pickups_screen.dart';
 import 'screens/pickup_map_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ✅ Firebase init removed — will re-enable once Firebase is configured
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
-  // );
-
   runApp(const MyApp());
 }
 
@@ -31,6 +25,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Restaurant Waste Management',
       debugShowCheckedModeBanner: false,
+
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: darwcosGreen),
         useMaterial3: true,
@@ -40,30 +35,19 @@ class MyApp extends StatelessWidget {
           foregroundColor: Colors.white,
           elevation: 2,
           centerTitle: true,
-          titleTextStyle: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
         ),
       ),
 
-      // -------------------
-      // 🔰 Initial Route
-      // -------------------
-      initialRoute: '/login',
+      // ✅ NEW: auto-route using role
+      home: const RoleRouter(),
 
-      // -------------------
-      // 🧭 App Routes
-      // -------------------
       routes: {
         '/login': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),
+        '/driver-dashboard': (context) => const DriverDashboardScreen(),
         '/available-pickups': (context) => const AvailablePickupsScreen(),
       },
 
-      // -------------------
-      // 🗺️ Dynamic Route for Map
-      // -------------------
       onGenerateRoute: (settings) {
         if (settings.name == '/pickup-map') {
           final args =
@@ -76,7 +60,6 @@ class MyApp extends StatelessWidget {
           );
         }
 
-        // Fallback route if something goes wrong
         return MaterialPageRoute(
           builder: (context) => const Scaffold(
             body: Center(
@@ -88,6 +71,68 @@ class MyApp extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+//
+// ✅ BOOT SCREEN: Checks SharedPreferences
+//
+class RoleRouter extends StatefulWidget {
+  const RoleRouter({super.key});
+
+  @override
+  State<RoleRouter> createState() => _RoleRouterState();
+}
+
+class _RoleRouterState extends State<RoleRouter> {
+  @override
+  void initState() {
+    super.initState();
+    _checkLogin();
+  }
+
+  Future<void> _checkLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final loggedIn = prefs.getBool("logged_in") ?? false;
+    final role = prefs.getString("role");
+
+    await Future.delayed(const Duration(milliseconds: 400));
+
+    if (!mounted) return;
+
+    if (!loggedIn || role == null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+
+    if (role == "driver") {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DriverDashboardScreen()),
+      );
+      return;
+    }
+
+    // default → owner
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF015704),
+        ),
+      ),
     );
   }
 }

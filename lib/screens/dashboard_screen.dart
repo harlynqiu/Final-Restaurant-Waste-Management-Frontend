@@ -34,20 +34,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _fetchDashboardData() async {
     await Future.wait([
-      _fetchUserInfo(),
+      _fetchOwnerInfo(),
       _fetchPoints(),
     ]);
     setState(() => _loading = false);
   }
 
-  Future<void> _fetchUserInfo() async {
-    final user = await ApiService.getCurrentUser();
-    final employee = await ApiService.getMyEmployeeProfile();
-    if (!mounted) return;
-    setState(() {
-      _username = user?["username"] ?? "";
-      _restaurantName = employee?["restaurant_name"] ?? "Restaurant";
-    });
+  // ✅ FIXED — uses ONLY /accounts/me/
+  Future<void> _fetchOwnerInfo() async {
+    try {
+      final owner = await ApiService.getOwnerProfile();
+
+      if (owner == null) {
+        setState(() {
+          _username = "";
+          _restaurantName = "Restaurant";
+        });
+        return;
+      }
+
+      setState(() {
+        _username = owner["username"] ?? "";
+        _restaurantName = owner["restaurant_name"] ?? "Restaurant";
+      });
+
+    } catch (e) {
+      setState(() {
+        _username = "";
+        _restaurantName = "Restaurant";
+      });
+    }
   }
 
   Future<void> _fetchPoints() async {
@@ -161,6 +177,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ],
                   ),
+
                   // 🔍 Search bar
                   Expanded(
                     child: Center(
@@ -202,13 +219,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -221,7 +231,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           "assets/images/black_philippine_eagle.png",
                           height: 65,
                           width: 65,
-                          fit: BoxFit.cover,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -243,34 +252,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 13,
-                                height: 1.4,
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: darwcosGreen,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                        ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Coming soon: Eco Awareness Tips 🌿"),
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          "Learn More",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                       ),
                     ],
@@ -296,8 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (_) => const TrashPickupScreen()),
+                        MaterialPageRoute(builder: (_) => const TrashPickupScreen()),
                       );
                     },
                   ),
@@ -308,44 +291,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (_) => const RewardsDashboardScreen()),
+                        MaterialPageRoute(builder: (_) => const RewardsDashboardScreen()),
                       );
                     },
                   ),
                   _buildDashboardCard(
                     icon: Icons.people,
                     title: "Employees",
-                    subtitle: "Manage your staff records",
+                    subtitle: "Manage staff records",
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (_) => const EmployeeListScreen()),
+                        MaterialPageRoute(builder: (_) => const EmployeeListScreen()),
                       );
                     },
                   ),
                   _buildDashboardCard(
                     icon: Icons.favorite,
                     title: "Donation Drives",
-                    subtitle: "Join & give back to the community",
+                    subtitle: "Join and help the community",
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (_) => const DonationDriveListScreen()),
+                        MaterialPageRoute(builder: (_) => const DonationDriveListScreen()),
                       );
                     },
                   ),
                   _buildDashboardCard(
                     icon: Icons.subscriptions,
                     title: "Subscription",
-                    subtitle: "View plan details",
+                    subtitle: "Manage your plan",
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: (_) => const MySubscriptionScreen()),
+                        MaterialPageRoute(builder: (_) => const MySubscriptionScreen()),
                       );
                     },
                   ),
@@ -410,8 +389,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const TrashPickupScreen()),
+                MaterialPageRoute(builder: (_) => const TrashPickupScreen()),
               );
             },
           ),
@@ -422,8 +400,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const RewardsDashboardScreen()),
+                MaterialPageRoute(builder: (_) => const RewardsDashboardScreen()),
               );
             },
           ),
@@ -434,8 +411,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const EmployeeListScreen()),
+                MaterialPageRoute(builder: (_) => const EmployeeListScreen()),
               );
             },
           ),
@@ -446,8 +422,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const DonationDriveListScreen()),
+                MaterialPageRoute(builder: (_) => const DonationDriveListScreen()),
               );
             },
           ),
@@ -459,8 +434,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const MySubscriptionScreen()),
+                MaterialPageRoute(builder: (_) => const MySubscriptionScreen()),
               );
             },
           ),
